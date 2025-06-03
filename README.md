@@ -21,14 +21,14 @@ blog平台
 
 **阶段一：后端基础搭建与用户认证 (约 1-2 周)**
 
-1. **环境搭建与项目初始化：**
+1. ✅**环境搭建与项目初始化：**
     * 安装 Python, Django, DRF, `djangorestframework-simplejwt`, `mysqlclient` (或对应数据库驱动)。
     * 创建 Django 项目 (`blog_project`) 和核心应用 (`users`, `articles`)。
     * 配置数据库连接 (MySQL)。
     * 配置 `settings.py`：注册应用，配置 DRF，配置 Simple JWT。
     * 遵循 PDF 中的项目结构建议 (`apps/`, `utils/`, `config/`)。
 
-2. **用户模块 (后端 - `users` app):**
+2. ✅**用户模块 (后端 - `users` app):**
     * **模型 (Models)：**
         * 自定义用户模型 (继承 `AbstractUser`)，至少包含：`username`, `email`, `password`。暂时不考虑头像、复杂权限分级。
     * **序列化器 (Serializers)：**

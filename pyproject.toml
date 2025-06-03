@@ -11,3 +11,10 @@ dependencies = [
     "djangorestframework-simplejwt>=5.5.0",
     "pillow>=11.2.1",
 ]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+

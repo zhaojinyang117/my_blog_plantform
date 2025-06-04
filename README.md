@@ -19,7 +19,7 @@ blog平台
 
 **开发计划（分阶段进行）：**
 
-**阶段一：后端基础搭建与用户认证 (约 1-2 周)**
+**✅阶段一：后端基础搭建与用户认证 (约 1-2 周)**
 
 1. ✅**环境搭建与项目初始化：**
     * 安装 Python, Django, DRF, `djangorestframework-simplejwt`, `mysqlclient` (或对应数据库驱动)。
@@ -42,9 +42,9 @@ blog平台
     * **路由 (URLs)：** 配置上述 API 的路由。
     * **初步测试：** 使用 Postman 或类似工具测试用户注册、登录、获取用户信息接口。
 
-**阶段二：文章模块核心功能 (后端 - `articles` app) (约 1-2 周)**
+**✅阶段二：文章模块核心功能 (后端 - `articles` app) (约 1-2 周)**
 
-1. **文章模块 (后端 - `articles` app):**
+1. ✅**文章模块 (后端 - `articles` app):**
     * **模型 (Models)：**
         * 文章模型 (`Article`)：`title`, `content` (TextField, 考虑支持 Markdown 文本), `author` (ForeignKey 到 User), `created_at`, `updated_at`, `status` (简单选择：草稿/发布)。
         * 暂时不实现复杂的分类与标签、文章访问权限、点赞收藏。

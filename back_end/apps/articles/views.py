@@ -29,7 +29,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         """根据操作类型选择序列化器"""
-        if self.action in ["create", "update", "partial_update"]:
+        if self.action in ["update", "partial_update"]:
             return ArticleCreateUpdateSerializer
         return ArticleSerializer
 

@@ -284,8 +284,9 @@ class ArticleAPITest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["title"], "新创建的文章")
-        # 注意：创建时使用ArticleCreateUpdateSerializer，不包含author字段
-        self.assertNotIn("author", response.data)
+        # 注意：创建时现在使用ArticleSerializer，包含author字段
+        self.assertIn("author", response.data)
+        self.assertEqual(response.data["author"]["username"], "user1")
 
         # 验证数据库中确实创建了文章，并且作者正确
         article = Article.objects.get(title="新创建的文章")

@@ -36,7 +36,7 @@ export default function ArticleActions({ articleId, authorId }: ArticleActionsPr
   const handleDelete = async () => {
     if (!user) return
     try {
-      await api.deleteArticle(articleId, user.id)
+      await api.deleteArticle(articleId)
       toast({
         title: "删除成功",
         description: "文章已成功删除。",

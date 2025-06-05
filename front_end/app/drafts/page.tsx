@@ -27,17 +27,28 @@ function DraftsContent() {
 
   useEffect(() => {
     async function fetchDrafts() {
-      if (!user) return
+      if (!user) {
+        console.log("No user found, skipping draft fetch")
+        return
+      }
 
+      console.log("Fetching drafts for user:", user.id)
       setIsLoading(true)
+      setError(null)
+
       try {
         const articles = await api.getMyArticles(user.id)
+        console.log("Fetched articles:", articles)
+
         // 只过滤出草稿状态的文章
         const draftArticles = articles.filter((article) => article.status === "草稿")
+        console.log("Draft articles:", draftArticles)
+
         setDrafts(draftArticles)
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to fetch drafts:", err)
-        setError("获取草稿失败，请稍后再试。")
+        const errorMessage = err.message || "获取草稿失败，请稍后再试。"
+        setError(errorMessage)
       } finally {
         setIsLoading(false)
       }

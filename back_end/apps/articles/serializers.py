@@ -35,7 +35,17 @@ class ArticleSerializer(serializers.ModelSerializer):
 class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
     """创建和更新文章序列化器"""
 
+    author = AuthorSerializer(read_only=True)
+
     class Meta:
         model = Article
-        fields = ["id", "title", "content", "status"]
-        read_only_fields = ["id"]
+        fields = [
+            "id",
+            "title",
+            "content",
+            "status",
+            "author",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "author", "created_at", "updated_at"]

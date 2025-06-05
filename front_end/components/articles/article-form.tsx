@@ -49,10 +49,10 @@ export default function ArticleForm({ article, formType }: ArticleFormProps) {
     try {
       let savedArticle: Article | null = null
       if (formType === "create") {
-        savedArticle = await api.createArticle(articleData, user)
+        savedArticle = await api.createArticle(articleData)
         toast({ title: "文章创建成功！", description: `"${savedArticle.title}" 已保存。` })
       } else if (article) {
-        savedArticle = await api.updateArticle(article.id, articleData, user.id)
+        savedArticle = await api.updateArticle(article.id, articleData)
         toast({ title: "文章更新成功！", description: `"${savedArticle?.title}" 已更新。` })
       }
 

@@ -119,13 +119,13 @@ blog平台
 1. **后端 (articles 或新建 `comments` app):**
     * **模型 (Models)：**
         * 评论模型 (`Comment`)：`article` (ForeignKey 到 Article), `author` (ForeignKey 到 User), `content` (TextField), `created_at`.
-        * 暂时不实现嵌套评论、审核、敏感词过滤。
+        * 暂时不实现审核、敏感词过滤。
     * **序列化器 (Serializers)：**
         * 评论序列化器 (`CommentSerializer`)。
     * **视图 (Views)：**
         * 获取某篇文章的评论列表 API (`GET /api/articles/<article_id>/comments/`)。
         * 为某篇文章创建评论 API (`POST /api/articles/<article_id>/comments/`) - 需要认证。
-        * (可选) 删除评论 API (`DELETE /api/comments/<comment_id>/`) - 用户只能删除自己的评论。
+        * 删除评论 API (`DELETE /api/comments/<comment_id>/`) - 用户只能删除自己的评论。
     * **路由 (URLs)：** 配置评论相关 API 路由。
 
 2. **前端：**
@@ -133,7 +133,7 @@ blog平台
         * 调用 API 获取并展示评论列表。
         * 提供评论表单 (如果用户已登录)。
         * 提交评论后刷新评论列表。
-        * (可选) 用户可以删除自己的评论。
+        * 用户可以删除自己的评论。
 
 **阶段六：联调、测试与基础部署准备 (约 1 周)**
 
@@ -154,7 +154,7 @@ blog平台
 
 * **用户管理：** 移除了邮箱验证、头像上传、复杂权限分级、用户激活状态管理。
 * **文章管理：** 移除了分类与标签系统 (可后续添加为简单文本字段或完整 M2M)、文章访问权限 (默认公开)、点赞/收藏。
-* **评论系统：** 移除了嵌套评论、评论审核、敏感词过滤、管理员删除权限。
+* **评论系统：** 移除了评论审核、敏感词过滤、管理员删除权限。
 * **权限管理：** 简化为基于用户角色的基本操作权限 (如文章作者才能编辑/删除)，暂不引入复杂的路由级、对象级权限 (如 Django Guardian)。
 * **技术要求：** 暂不强制 Django Filter, Django Guardian, Redis 缓存, 访问日志中间件, 数据库事务 (DRF 会处理一些基本情况)。Swagger 可后续添加。
 * **后台管理：** 初期可依赖 Django Admin 进行管理，不开发独立的前端后台。

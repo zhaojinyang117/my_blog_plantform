@@ -1,23 +1,30 @@
 from django.urls import path, include
-from rest_framework_nested import routers # 导入 rest_framework_nested
+from rest_framework.routers import SimpleRouter
+from rest_framework_nested.routers import NestedSimpleRouter
 from .views import ArticleViewSet
-from apps.comments.views import CommentViewSet # 导入 CommentViewSet
+from apps.comments.views import CommentViewSet
 
-# 主路由，用于文章
-router = routers.SimpleRouter()
-router.register(r'', ArticleViewSet, basename='article') # 明确指定 basename='article'
+# 主路由，用于文章 CRUD 操作
+# 生成的URL: /api/articles/
+router = SimpleRouter()
+router.register(r"", ArticleViewSet, basename="article")
 
-# 嵌套路由，用于文章下的评论
-# 第一个参数是父路由 (router)
-# 第二个参数是父路由中用于查找的前缀 (r'')，这里对应 ArticleViewSet
-# 第三个参数是父资源的主键查找字段 (lookup='article')，这会生成如 /articles/<article_pk>/... 的URL
-articles_router = routers.NestedSimpleRouter(router, r'', lookup='article')
+# 嵌套路由，用于文章下的评论管理
+# 生成的URL: /api/articles/{article_pk}/comments/
+# 这种设计符合RESTful原则，评论作为文章的子资源
+articles_router = NestedSimpleRouter(
+    router,  # 父路由
+    r"",  # 父路由前缀（对应ArticleViewSet）
+    lookup="article",  # 父资源查找字段，生成 article_pk 参数
+)
 
-# 在嵌套路由下注册 CommentViewSet
-# basename='article-comments' 与测试用例中的 reverse 调用匹配
-articles_router.register(r'comments', CommentViewSet, basename='article-comments')
+# 注册评论视图集到嵌套路由
+# basename='article-comments' 用于URL反向解析
+articles_router.register(r"comments", CommentViewSet, basename="article-comments")
 
 urlpatterns = [
-    path('', include(router.urls)),
-    path('', include(articles_router.urls)), # 包含嵌套路由的 URL
+    # 文章相关路由: /api/articles/
+    path("", include(router.urls)),
+    # 评论相关路由: /api/articles/{article_pk}/comments/
+    path("", include(articles_router.urls)),
 ]

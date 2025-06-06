@@ -11,6 +11,7 @@ dependencies = [
     "djangorestframework-simplejwt>=5.5.0",
     "pillow>=11.2.1",
     "requests>=2.32.3",
+    "drf-nested-routers>=0.93.4",
 ]
 
 [tool.mypy]

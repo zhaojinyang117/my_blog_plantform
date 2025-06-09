@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import ArticleActions from "./article-actions"
+import CommentList from "@/components/comments/comment-list"
 
 interface ArticleDetailClientProps {
   articleId: string
@@ -28,26 +29,26 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
       try {
         setLoading(true)
         setError(null)
-        
+
         console.log("Fetching article:", articleId, "User authenticated:", isAuthenticated)
-        
+
         const fetchedArticle = await api.getArticle(articleId)
-        
+
         if (!fetchedArticle) {
           setError("文章未找到")
           return
         }
-        
+
         // 检查是否是草稿文章且用户是否有权限访问
         if (fetchedArticle.status === "草稿" && (!user || fetchedArticle.author.id !== user.id)) {
           setError("您没有权限访问此草稿文章")
           return
         }
-        
+
         setArticle(fetchedArticle)
       } catch (err: any) {
         console.error("Failed to fetch article:", err)
-        
+
         if (err.message?.includes('401') || err.message?.includes('认证')) {
           setError("请登录后访问此文章")
         } else if (err.message?.includes('403') || err.message?.includes('权限')) {
@@ -90,8 +91,8 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           <AlertDescription className="flex items-center justify-between">
             <span>{error}</span>
             {error.includes("登录") && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => router.push("/login")}
               >
@@ -100,10 +101,10 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
             )}
           </AlertDescription>
         </Alert>
-        
+
         <div className="text-center">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => router.back()}
           >
             返回上一页
@@ -117,8 +118,8 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
     return (
       <div className="max-w-3xl mx-auto py-8 text-center">
         <p className="text-muted-foreground">文章未找到</p>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="mt-4"
           onClick={() => router.back()}
         >
@@ -139,7 +140,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           </AlertDescription>
         </Alert>
       )}
-      
+
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl">{article.title}</h1>
         <div className="mt-4 flex items-center justify-center space-x-4 text-muted-foreground">
@@ -202,6 +203,11 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
       >
         {article.content}
       </ReactMarkdown>
+
+      {/* 评论区域 */}
+      <div className="mt-12 border-t pt-8">
+        <CommentList articleId={article.id} />
+      </div>
     </article>
   )
 }

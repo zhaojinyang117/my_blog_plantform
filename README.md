@@ -135,36 +135,423 @@ blog平台
         * 提交评论后刷新评论列表。
         * 用户可以删除自己的评论。
 
-**阶段六：联调、测试与基础部署准备 (约 1 周)**
-
-1. **前后端联调：** 确保所有功能按预期工作。
-2. **CORS 配置：** 在 Django 后端配置 `django-cors-headers` 以允许前端访问。
-3. **错误处理：** 完善前端和后端的错误提示和处理。
-4. **基础样式：** 使用简单的 CSS 或 UI 框架 (如 Bootstrap, Material UI 基础组件) 进行基本美化，确保可用性。
-5. **文档：** 编写基础的 API 文档 (如使用 DRF 自带的 Browsable API，或简单的 Postman Collection)。
-6. **准备部署：**
-    * **后端：** Gunicorn + Nginx (或类似方案)。
-    * **前端：** `npm run build` 生成静态文件，可由 Nginx 托管，或使用 Vercel/Netlify 等平台。
+**Django + React 博客平台开发计划（进阶基础功能补充）**  
+**当前进度：已完成阶段一至阶段五基础功能开发**  
 
 ---
 
-**总计时间预估：** 约 7 - 11 周 (这是一个相对宽松的估计，具体取决于您的熟练程度和投入时间)。
+### **阶段六：完善用户管理模块 (约3-5天)**  
 
-**关键简化点 (对比 PDF)：**
+#### **1. 邮箱验证功能（后端 - `users` app）**  
 
-* **用户管理：** 移除了邮箱验证、头像上传、复杂权限分级、用户激活状态管理。
-* **文章管理：** 移除了分类与标签系统 (可后续添加为简单文本字段或完整 M2M)、文章访问权限 (默认公开)、点赞/收藏。
-* **评论系统：** 移除了评论审核、敏感词过滤、管理员删除权限。
-* **权限管理：** 简化为基于用户角色的基本操作权限 (如文章作者才能编辑/删除)，暂不引入复杂的路由级、对象级权限 (如 Django Guardian)。
-* **技术要求：** 暂不强制 Django Filter, Django Guardian, Redis 缓存, 访问日志中间件, 数据库事务 (DRF 会处理一些基本情况)。Swagger 可后续添加。
-* **后台管理：** 初期可依赖 Django Admin 进行管理，不开发独立的前端后台。
+- **模型增强**  
+  * 添加 `is_active` 字段（默认False），标记账户激活状态[1]  
+  * 添加 `email_verification_token` 字段存储验证令牌  
 
-**开发建议：**
+  ```python
+  # users/models.py
+  class CustomUser(AbstractUser):
+      is_active = models.BooleanField(default=False)
+      email_verification_token = models.CharField(max_length=64, blank=True)
+  ```
 
-1. **版本控制：** 从一开始就使用 Git 进行版本控制。
-2. **先后端后前端：** 通常建议先完成一部分后端 API，再进行对应的前端开发，这样前端有明确的接口可以对接。
-3. **小步快跑，持续集成：** 完成一个小功能模块后，就进行测试和集成。
-4. **DRF 文档：** Django REST framework 的官方文档是你最好的朋友。
-5. **React 文档与社区：** React 也有丰富的学习资源。
+- **邮件服务**  
+  * 配置 Django 邮件设置（SMTP 参数）  
+  * 实现邮件发送工具类（使用 `django.core.mail`）  
 
-这个计划为您勾勒了一个基础版博客平台的轮廓。您可以根据实际开发进度和需求灵活调整。祝您开发顺利！
+  ```python
+  # utils/email.py
+  from django.core.mail import send_mail
+  
+  def send_verification_email(user):
+      token = generate_token()  # 使用secrets模块生成安全令牌
+      verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
+      send_mail(
+          '邮箱验证',
+          f'请点击链接完成验证: {verification_url}',
+          settings.DEFAULT_FROM_EMAIL,
+          [user.email]
+      )
+      user.email_verification_token = token
+      user.save()
+  ```
+
+- **API 增强**  
+  * 修改注册接口：注册后发送验证邮件（异步任务可用 `threading` 简单实现）  
+  * 新增验证接口：`GET /api/users/verify-email/?token=`  
+
+  ```python
+  # users/views.py
+  class EmailVerificationView(APIView):
+      def get(self, request):
+          token = request.GET.get('token')
+          user = CustomUser.objects.filter(email_verification_token=token).first()
+          if user:
+              user.is_active = True
+              user.email_verification_token = ''
+              user.save()
+              return Response({'status': 'success'})
+          return Response({'error': '无效令牌'}, status=400)
+  ```
+
+- **前端适配**  
+  * 注册页面：成功注册后提示检查邮箱  
+  * 新增验证页面：`/verify-email` 处理验证逻辑  
+
+#### **2. 用户头像上传（前后端）**  
+
+- **后端实现**  
+  * 安装 `Pillow` 处理图片  
+  * 修改用户模型添加 `avatar` 字段  
+
+  ```python
+  # users/models.py
+  class CustomUser(AbstractUser):
+      avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
+  ```
+
+  * 创建 `UserProfileSerializer` 处理头像上传  
+
+  ```python
+  # users/serializers.py
+  class UserProfileSerializer(serializers.ModelSerializer):
+      class Meta:
+          model = CustomUser
+          fields = ['username', 'email', 'avatar']
+  ```
+
+  * 新增头像上传接口：`PATCH /api/users/me/avatar/`  
+* **前端实现**  
+  * 用户中心页面添加头像上传组件（使用 ``）  
+  * 使用 `FormData` 处理文件上传  
+
+  ```javascript
+  // 前端示例代码
+  const handleUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    await api.patch('/users/me/avatar/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  };
+  ```
+
+#### **3. 用户状态管理（后台）**  
+
+- **Django Admin 增强**  
+  * 在管理员界面添加用户状态过滤  
+  * 增加批量操作：激活/禁用用户  
+
+  ```python
+  # users/admin.py
+  @admin.register(CustomUser)
+  class CustomUserAdmin(UserAdmin):
+      list_filter = ('is_active',)
+      actions = ['activate_users', 'deactivate_users']
+  
+      def activate_users(self, request, queryset):
+          queryset.update(is_active=True)
+      activate_users.short_description = "激活选定用户"
+  ```
+
+---
+
+### **阶段七：增强权限管理系统 (约5-7天)**  
+
+#### **1. 路由级权限控制**  
+
+- **后端中间件**  
+  * 创建 `AdminOnlyMiddleware` 限制管理后台路由  
+
+  ```python
+  # utils/middleware.py
+  class AdminOnlyMiddleware:
+      def __init__(self, get_response):
+          self.get_response = get_response
+  
+      def __call__(self, request):
+          if request.path.startswith('/admin/') and not request.user.is_staff:
+              return HttpResponseForbidden()
+          return self.get_response(request)
+  ```
+
+- **DRF 权限类**  
+  * 创建 `IsAdminOrReadOnly` 权限类  
+
+  ```python
+  # utils/permissions.py
+  class IsAdminOrReadOnly(permissions.BasePermission):
+      def has_permission(self, request, view):
+          return (
+              request.method in permissions.SAFE_METHODS or
+              request.user and 
+              request.user.is_staff
+          )
+  ```
+
+#### **2. 对象级权限控制**  
+
+- **集成 Django Guardian**  
+  * 安装 `django-guardian`  
+  * 配置文章模型权限  
+
+  ```python
+  # articles/models.py
+  from guardian.models import UserObjectPermissionAbstract
+  
+  class Article(models.Model):
+      ...
+      class Meta:
+          permissions = [
+              ('edit_article', "Can edit article"),
+          ]
+  
+  class ArticleUserObjectPermission(UserObjectPermissionAbstract):
+      content_object = models.ForeignKey(Article, on_delete=models.CASCADE)
+  ```
+
+- **视图权限控制**  
+
+  ```python
+  # articles/views.py
+  from guardian.shortcuts import assign_perm
+  
+  class ArticleCreateView(APIView):
+      def post(self, request):
+          serializer = ArticleSerializer(data=request.data)
+          if serializer.is_valid():
+              article = serializer.save(author=request.user)
+              assign_perm('articles.edit_article', request.user, article)
+              return Response(serializer.data)
+  ```
+
+---
+
+### **阶段八：评论系统进阶功能 (约5-7天)**  
+
+#### **1. 评论审核机制**  
+
+- **模型增强**  
+
+  ```python
+  # comments/models.py
+  class Comment(models.Model):
+      APPROVAL_STATUS = [
+          ('pending', '待审核'),
+          ('approved', '已通过'),
+          ('rejected', '已拒绝')
+      ]
+      status = models.CharField(max_length=10, choices=APPROVAL_STATUS, default='pending')
+  ```
+
+- **管理界面**  
+  * 在 Django Admin 添加状态过滤器和批量审核操作  
+* **API 修改**  
+
+  ```python
+  # comments/views.py
+  class CommentCreateView(APIView):
+      permission_classes = [IsAuthenticated]
+      
+      def post(self, request, article_id):
+          serializer = CommentSerializer(data=request.data)
+          if serializer.is_valid():
+              serializer.save(article_id=article_id, author=request.user, status='pending')
+              return Response(serializer.data)
+  ```
+
+#### **2. 敏感词过滤**  
+
+- **实现基础过滤**  
+
+  ```python
+  # utils/text_filter.py
+  sensitive_words = ['违规词1', '违规词2']  # 可扩展为数据库存储
+  
+  def filter_content(text):
+      for word in sensitive_words:
+          text = text.replace(word, '***')
+      return text
+  ```
+
+- **集成到序列化器**  
+
+  ```python
+  # comments/serializers.py
+  class CommentSerializer(serializers.ModelSerializer):
+      def validate_content(self, value):
+          return filter_content(value)
+  ```
+
+---
+
+### **阶段九：数据统计基础实现 (约3-5天)**  
+
+#### **1. 用户活跃度统计**  
+
+- **模型添加字段**  
+
+  ```python
+  # users/models.py
+  class CustomUser(AbstractUser):
+      last_login_ip = models.GenericIPAddressField(null=True)
+      login_count = models.IntegerField(default=0)
+  ```
+
+- **中间件记录**  
+
+  ```python
+  # utils/middleware.py
+  class UserActivityMiddleware:
+      def __init__(self, get_response):
+          self.get_response = get_response
+  
+      def __call__(self, request):
+          if request.user.is_authenticated:
+              request.user.login_count += 1
+              request.user.last_login_ip = request.META.get('REMOTE_ADDR')
+              request.user.save()
+          return self.get_response(request)
+  ```
+
+#### **2. 文章访问统计**  
+
+- **模型增强**  
+
+  ```python
+  # articles/models.py
+  class Article(models.Model):
+      view_count = models.PositiveIntegerField(default=0)
+  ```
+
+- **视图计数器**  
+
+  ```python
+  # articles/views.py
+  class ArticleDetailView(RetrieveAPIView):
+      def retrieve(self, request, *args, **kwargs):
+          instance = self.get_object()
+          instance.view_count += 1
+          instance.save(update_fields=['view_count'])
+          return super().retrieve(request, *args, **kwargs)
+  ```
+
+---
+
+### **阶段十：缓存优化 (约2-3天)**  
+
+#### **1. Redis 配置**  
+
+- 安装 `django-redis`  
+* 配置缓存后端  
+
+  ```python
+  # settings.py
+  CACHES = {
+      "default": {
+          "BACKEND": "django_redis.cache.RedisCache",
+          "LOCATION": "redis://127.0.0.1:6379/1",
+      }
+  }
+  ```
+
+#### **2. 热门文章缓存**  
+
+```python
+# articles/views.py
+from django.core.cache import cache
+
+class ArticleListView(ListAPIView):
+    def get_queryset(self):
+        cache_key = 'hot_articles'
+        queryset = cache.get(cache_key)
+        if not queryset:
+            queryset = Article.objects.filter(status='published').order_by('-view_count')[:10]
+            cache.set(cache_key, queryset, timeout=3600)  # 缓存1小时
+        return queryset
+```
+
+---
+
+### **阶段十一：测试与优化 (约5-7天)**  
+
+#### **1. 单元测试**  
+
+- 使用 Django 测试框架  
+* 覆盖核心功能：  
+
+  ```python
+  # articles/tests.py
+  class ArticleTests(APITestCase):
+      def test_create_article(self):
+          self.client.force_authenticate(user=self.user)
+          response = self.client.post('/api/articles/', {'title': 'Test', 'content': '...'})
+          self.assertEqual(response.status_code, 201)
+  ```
+
+#### **2. 性能优化**  
+
+- 使用 `select_related` 优化查询  
+
+  ```python
+  # articles/views.py
+  queryset = Article.objects.select_related('author')
+  ```
+
+- 添加数据库索引  
+
+  ```python
+  class Article(models.Model):
+      class Meta:
+          indexes = [
+              models.Index(fields=['-created_at']),
+          ]
+  ```
+
+---
+
+### **阶段十二：部署与文档 (约3-5天)**  
+
+#### **1. Docker 部署**  
+
+```dockerfile
+# Dockerfile 示例
+FROM python:3.9
+RUN pip install gunicorn
+COPY . /app
+WORKDIR /app
+RUN pip install -r requirements.txt
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+```
+
+#### **2. 文档生成**  
+
+- 使用 `drf-spectacular` 生成 OpenAPI 文档  
+
+  ```python
+  # settings.py
+  INSTALLED_APPS += ['drf_spectacular']
+  
+  REST_FRAMEWORK = {
+      'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+  }
+  ```
+
+- 编写部署手册：  
+
+  ```
+  ## 部署步骤
+  1. 安装 Docker 和 docker-compose
+  2. 构建镜像: docker-compose build
+  3. 启动服务: docker-compose up -d
+  ```
+
+---
+
+**总新增开发时间预估：** 约 25-35 天  
+**关键实现要点：**  
+
+1. 权限系统采用组合策略：DRF权限类 + Django Guardian对象权限  
+2. 敏感词过滤采用内存缓存 + 定期更新机制  
+3. 统计功能使用中间件 + 模型字段组合实现  
+4. 缓存策略遵循"先读缓存-后更新"模式[1]  

@@ -114,9 +114,9 @@ blog平台
         * 调用删除文章 API。
     * **路由守卫/组件：** 实现 `ProtectedRoute`，未登录用户访问需登录的页面时跳转到登录页。
 
-**阶段五：评论模块 (基础版) (约 1-2 周)**
+**✅阶段五：评论模块 (基础版) (约 1-2 周)**
 
-1. **后端 (articles 或新建 `comments` app):**
+1. ✅**后端 (articles 或新建 `comments` app):**
     * **模型 (Models)：**
         * 评论模型 (`Comment`)：`article` (ForeignKey 到 Article), `author` (ForeignKey 到 User), `content` (TextField), `created_at`.
         * 暂时不实现审核、敏感词过滤。
@@ -128,7 +128,7 @@ blog平台
         * 删除评论 API (`DELETE /api/comments/<comment_id>/`) - 用户只能删除自己的评论。
     * **路由 (URLs)：** 配置评论相关 API 路由。
 
-2. **前端：**
+2. ✅**前端：**
     * **文章详情页：**
         * 调用 API 获取并展示评论列表。
         * 提供评论表单 (如果用户已登录)。

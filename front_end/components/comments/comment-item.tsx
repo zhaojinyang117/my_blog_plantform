@@ -160,7 +160,7 @@ export default function CommentItem({
           </div>
 
           {/* 回复按钮 */}
-          {level < maxLevel && (
+          {level === 0 && user && (
             <div className="flex items-center space-x-2">
               <Button
                 variant="ghost"

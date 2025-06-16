@@ -144,7 +144,7 @@ blog平台
 
 #### **1. 邮箱验证功能（后端 - `users` app）**  
 
-- **模型增强**  
+* ✅**模型增强**  
   * 添加 `is_active` 字段（默认False），标记账户激活状态[1]  
   * 添加 `email_verification_token` 字段存储验证令牌  
 
@@ -155,7 +155,7 @@ blog平台
       email_verification_token = models.CharField(max_length=64, blank=True)
   ```
 
-- **邮件服务**  
+* ✅**邮件服务**  
   * 配置 Django 邮件设置（SMTP 参数）  
   * 实现邮件发送工具类（使用 `django.core.mail`）  
 
@@ -176,7 +176,7 @@ blog平台
       user.save()
   ```
 
-- **API 增强**  
+* ✅**API 增强**  
   * 修改注册接口：注册后发送验证邮件（异步任务可用 `threading` 简单实现）  
   * 新增验证接口：`GET /api/users/verify-email/?token=`  
 
@@ -200,7 +200,7 @@ blog平台
 
 #### **2. 用户头像上传（前后端）**  
 
-- **后端实现**  
+* ✅**后端实现**  
   * 安装 `Pillow` 处理图片  
   * 修改用户模型添加 `avatar` 字段  
 
@@ -238,7 +238,7 @@ blog平台
 
 #### **3. 用户状态管理（后台）**  
 
-- **Django Admin 增强**  
+* ✅**Django Admin 增强**  
   * 在管理员界面添加用户状态过滤  
   * 增加批量操作：激活/禁用用户  
 

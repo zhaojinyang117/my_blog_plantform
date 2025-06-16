@@ -15,6 +15,31 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "email", "bio", "avatar"]
         read_only_fields = ["id", "email"]
 
+class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    用户个人资料序列化器
+    """
+    class Meta:
+        model = User
+        fields = ["username", "email", "bio", "avatar"]
+        read_only_fields = ["email"]
+
+    def validate_avatar(self, value):
+        """
+        验证头像文件
+        """
+        # 限制文件大小
+        if value.size > 1024 * 1024 * 2:
+            raise serializers.ValidationError("头像文件太大了，不能超过2MB")
+        
+        # 检查文件类型
+        allowed_extensions = ["image/jpeg", "image/png", "image/gif"]
+        if value.content_type not in allowed_extensions:
+            raise serializers.ValidationError("只支持JPEG、PNG、GIF格式")
+        return value
+    ####################
+    #待添加自动裁剪头像功能#
+    ####################
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     """

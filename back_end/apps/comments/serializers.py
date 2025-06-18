@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import Comment
 from apps.articles.serializers import AuthorSerializer
 
-class RepalySerializer(serializers.ModelSerializer):
+class ReplySerializer(serializers.ModelSerializer):
     """用于嵌套回复的序列化器"""
     user = AuthorSerializer(read_only=True)
 
@@ -27,7 +27,7 @@ class RepalySerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     user = AuthorSerializer(read_only=True)
-    replies:list = RepalySerializer(many=True, read_only=True)
+    replies = ReplySerializer(many=True, read_only=True)
 
     class Meta:
         model = Comment

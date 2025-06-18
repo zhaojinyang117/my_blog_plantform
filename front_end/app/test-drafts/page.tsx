@@ -39,7 +39,7 @@ export default function TestDraftsPage() {
         addResult(`📄 文章 ${index + 1}: "${article.title}" - 状态: ${article.status} - 作者: ${article.author.username}`)
       })
 
-      const drafts = articles.filter(article => article.status === "草稿")
+      const drafts = articles.filter(article => article.status === "draft")
       addResult(`📝 其中草稿文章: ${drafts.length} 篇`)
       
     } catch (error: any) {

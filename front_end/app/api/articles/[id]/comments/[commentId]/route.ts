@@ -18,10 +18,12 @@ export async function DELETE(
       headers['Authorization'] = authorization
     }
 
+    console.log(`删除评论API代理: DELETE ${BACKEND_URL}/articles/${id}/comments/${commentId}/`)
     const response = await fetch(`${BACKEND_URL}/articles/${id}/comments/${commentId}/`, {
       method: 'DELETE',
       headers,
     })
+    console.log(`后端响应状态: ${response.status} ${response.statusText}`)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
@@ -31,7 +33,9 @@ export async function DELETE(
       )
     }
 
-    return NextResponse.json({ success: true })
+    // 对于DELETE操作，后端通常返回204 No Content，没有响应体
+    // 直接返回成功状态
+    return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
     console.error('API proxy error:', error)
     return NextResponse.json(

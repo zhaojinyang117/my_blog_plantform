@@ -46,12 +46,18 @@ export default function CommentItem({
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      await api.deleteComment(articleId, comment.id)
+      console.log("正在删除评论:", { articleId, commentId: comment.id })
+      const result = await api.deleteComment(articleId, comment.id)
+      console.log("删除评论结果:", result)
       toast({
         title: "评论删除成功",
         description: "评论已成功删除",
       })
-      onCommentUpdated()
+      console.log("删除成功，调用onCommentUpdated...")
+      // 添加小延迟确保后端操作完成
+      setTimeout(() => {
+        onCommentUpdated()
+      }, 100)
     } catch (error) {
       console.error("删除评论失败:", error)
       toast({
@@ -100,7 +106,7 @@ export default function CommentItem({
             <div className="flex items-center space-x-3">
               <Avatar className="h-8 w-8">
                 <AvatarImage
-                  src={`/placeholder-0y3ry.png?width=32&height=32&query=user+${comment.user.username}`}
+                  src={comment.user.avatar || "/placeholder-user.jpg"}
                   alt={comment.user.username}
                 />
                 <AvatarFallback>

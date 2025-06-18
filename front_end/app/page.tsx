@@ -5,9 +5,10 @@ import ArticleItem from "@/components/articles/article-item"
 import api from "@/lib/api"
 import type { Article } from "@/lib/types"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
-import { FileText } from "lucide-react"
+import { FileText, AlertCircle, Mail } from "lucide-react"
 
 function DraftsButton() {
   const { isAuthenticated } = useAuth()
@@ -23,6 +24,31 @@ function DraftsButton() {
   )
 }
 
+function UserStatusAlert() {
+  const { user, isAuthenticated } = useAuth()
+
+  if (!isAuthenticated || !user || user.is_active) return null
+
+  return (
+    <Alert className="mb-6 border-orange-200 bg-orange-50">
+      <AlertCircle className="h-4 w-4 text-orange-600" />
+      <AlertDescription className="text-orange-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <strong>账户未激活</strong> - 请检查您的邮箱并点击验证链接以激活账户
+          </div>
+          <Button variant="outline" size="sm" asChild className="ml-4">
+            <Link href="/profile">
+              <Mail className="h-4 w-4 mr-2" />
+              查看详情
+            </Link>
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 export default function HomePage() {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,11 +59,15 @@ export default function HomePage() {
       try {
         setLoading(true)
         const fetchedArticles = await api.getArticles()
-        setArticles(fetchedArticles)
+
+        console.log("Fetched articles:", fetchedArticles)
+
+        // API已经处理了数据格式，直接使用
+        setArticles(fetchedArticles || [])
         setError(null)
       } catch (error) {
         console.error("Failed to fetch articles:", error)
-        setError("获取文章失败")
+        setError("获取文章失败，请稍后再试")
         setArticles([])
       } finally {
         setLoading(false)
@@ -80,6 +110,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
+      <UserStatusAlert />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-4xl font-bold tracking-tight">最新文章</h1>
         <DraftsButton />

@@ -143,7 +143,7 @@ export default function EditArticleClient({ articleId }: EditArticleClientProps)
       <div className="max-w-4xl mx-auto py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-center">编辑文章</h1>
-          {article.status === "草稿" && (
+          {article.status === "draft" && (
             <Alert className="mt-4">
               <Lock className="h-4 w-4" />
               <AlertDescription>

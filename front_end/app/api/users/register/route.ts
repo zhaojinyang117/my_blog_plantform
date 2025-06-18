@@ -16,8 +16,26 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      console.log('Backend error response:', errorData)
+
+      // 处理Django REST Framework的错误格式
+      let errorMessage = 'Registration failed'
+      if (errorData.detail) {
+        errorMessage = errorData.detail
+      } else if (errorData.non_field_errors) {
+        errorMessage = errorData.non_field_errors.join(', ')
+      } else if (typeof errorData === 'object') {
+        // 处理字段级错误
+        const fieldErrors = Object.entries(errorData)
+          .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+          .join('; ')
+        if (fieldErrors) {
+          errorMessage = fieldErrors
+        }
+      }
+
       return NextResponse.json(
-        { error: errorData.detail || `Backend request failed: ${response.status}` },
+        { error: errorMessage },
         { status: response.status }
       )
     }

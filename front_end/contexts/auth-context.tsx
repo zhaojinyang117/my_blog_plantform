@@ -62,9 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (credentials: LoginCredentials) => {
     try {
-      const { access, user: loggedInUser } = await api.login(credentials)
+      const { access, refresh, user: loggedInUser } = await api.login(credentials)
       if (typeof window !== 'undefined') {
         localStorage.setItem("authToken", access)
+        localStorage.setItem("refreshToken", refresh) // 存储refresh token
       }
       setToken(access)
       setUser(loggedInUser)
@@ -90,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem("authToken")
+      localStorage.removeItem("refreshToken") // 清除refresh token
     }
     setUser(null)
     setToken(null)

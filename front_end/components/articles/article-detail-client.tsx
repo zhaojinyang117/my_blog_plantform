@@ -40,7 +40,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
         }
 
         // 检查是否是草稿文章且用户是否有权限访问
-        if (fetchedArticle.status === "草稿" && (!user || fetchedArticle.author.id !== user.id)) {
+        if (fetchedArticle.status === "draft" && (!user || fetchedArticle.author.id !== user.id)) {
           setError("您没有权限访问此草稿文章")
           return
         }
@@ -132,7 +132,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
   return (
     <article className="max-w-3xl mx-auto py-8 prose dark:prose-invert lg:prose-xl">
       {/* 草稿标识 */}
-      {article.status === "草稿" && (
+      {article.status === "draft" && (
         <Alert className="mb-6">
           <Lock className="h-4 w-4" />
           <AlertDescription>
@@ -147,7 +147,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           <div className="flex items-center">
             <Avatar className="h-8 w-8 mr-2">
               <AvatarImage
-                src={`/placeholder-0y3ry.png?width=32&height=32&query=user+${article.author.username}`}
+                src={article.author.avatar || "/placeholder-user.jpg"}
                 alt={article.author.username}
               />
               <AvatarFallback>{article.author.username.charAt(0).toUpperCase()}</AvatarFallback>
@@ -165,7 +165,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
               })}
             </time>
           </div>
-          {article.status === "草稿" && (
+          {article.status === "draft" && (
             <>
               <span>•</span>
               <span className="text-orange-600 font-medium">草稿</span>

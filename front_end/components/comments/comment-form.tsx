@@ -59,14 +59,17 @@ export default function CommentForm({
         parent: parentId,
       }
 
-      await api.createComment(articleId, commentData)
-      
+      console.log("正在提交评论:", { articleId, commentData })
+      const result = await api.createComment(articleId, commentData)
+      console.log("评论提交结果:", result)
+
       toast({
         title: "评论发表成功",
         description: "您的评论已成功发表",
       })
 
       setContent("")
+      console.log("调用onCommentAdded回调...")
       onCommentAdded()
     } catch (error) {
       console.error("发表评论失败:", error)

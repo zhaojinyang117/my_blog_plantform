@@ -40,8 +40,8 @@ function DraftsContent() {
         const articles = await api.getMyArticles(user.id)
         console.log("Fetched articles:", articles)
 
-        // 只过滤出草稿状态的文章
-        const draftArticles = articles.filter((article) => article.status === "草稿")
+        // 只过滤出草稿状态的文章 (后端返回的状态是英文)
+        const draftArticles = articles.filter((article) => article.status === "draft")
         console.log("Draft articles:", draftArticles)
 
         setDrafts(draftArticles)

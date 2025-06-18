@@ -21,7 +21,9 @@ export default function ArticleForm({ article, formType }: ArticleFormProps) {
   const { user } = useAuth()
   const [title, setTitle] = useState(article?.title || "")
   const [content, setContent] = useState(article?.content || "")
-  const [status, setStatus] = useState<"草稿" | "发布">(article?.status || "草稿")
+  const [status, setStatus] = useState<"草稿" | "发布">(
+    article?.status === "draft" ? "草稿" : article?.status === "published" ? "发布" : "草稿"
+  )
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -31,7 +33,8 @@ export default function ArticleForm({ article, formType }: ArticleFormProps) {
     if (article) {
       setTitle(article.title)
       setContent(article.content)
-      setStatus(article.status)
+      // 将后端的英文状态转换为前端的中文状态
+      setStatus(article.status === "draft" ? "草稿" : "发布")
     }
   }, [article])
 
@@ -44,7 +47,9 @@ export default function ArticleForm({ article, formType }: ArticleFormProps) {
     setError(null)
     setIsLoading(true)
 
-    const articleData: ArticleFormData = { title, content, status }
+    // 将前端的中文状态转换为后端的英文状态
+    const backendStatus = status === "草稿" ? "draft" : "published"
+    const articleData: ArticleFormData = { title, content, status: backendStatus }
 
     try {
       let savedArticle: Article | null = null

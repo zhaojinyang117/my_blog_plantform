@@ -22,8 +22,25 @@ export default function CommentList({ articleId }: CommentListProps) {
   const fetchComments = async () => {
     try {
       setError(null)
+      console.log(`正在获取文章${articleId}的评论...`)
       const fetchedComments = await api.getComments(articleId)
-      setComments(fetchedComments)
+      console.log("获取到的评论数据:", fetchedComments)
+      console.log("评论数据类型:", typeof fetchedComments)
+      console.log("是否为数组:", Array.isArray(fetchedComments))
+      // 确保返回的是数组
+      if (Array.isArray(fetchedComments)) {
+        console.log(`成功获取${fetchedComments.length}条评论`)
+        setComments(fetchedComments)
+      } else {
+        console.warn("评论数据不是数组格式:", fetchedComments)
+        console.warn("尝试从results字段获取数据...")
+        if (fetchedComments && fetchedComments.results && Array.isArray(fetchedComments.results)) {
+          console.log(`从results字段获取到${fetchedComments.results.length}条评论`)
+          setComments(fetchedComments.results)
+        } else {
+          setComments([])
+        }
+      }
     } catch (error) {
       console.error("获取评论失败:", error)
       setError(error instanceof Error ? error.message : "获取评论失败")
@@ -37,11 +54,15 @@ export default function CommentList({ articleId }: CommentListProps) {
   }, [articleId])
 
   const handleCommentUpdated = () => {
+    console.log("handleCommentUpdated被调用，重新获取评论列表...")
     fetchComments()
   }
 
   // 计算总评论数（包括回复）
   const getTotalCommentCount = (comments: Comment[]): number => {
+    if (!Array.isArray(comments)) {
+      return 0
+    }
     return comments.reduce((total, comment) => {
       return total + 1 + getTotalCommentCount(comment.replies || [])
     }, 0)

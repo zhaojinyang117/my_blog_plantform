@@ -34,7 +34,7 @@ export async function GET(
     }
 
     const data = await response.json()
-    return NextResponse.json(data)
+    return NextResponse.json(data, { status: response.status })
   } catch (error) {
     console.error('API proxy error:', error)
     return NextResponse.json(
@@ -76,7 +76,7 @@ export async function POST(
     }
 
     const data = await response.json()
-    return NextResponse.json(data)
+    return NextResponse.json(data, { status: response.status })
   } catch (error) {
     console.error('API proxy error:', error)
     return NextResponse.json(

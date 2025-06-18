@@ -22,7 +22,7 @@ export default function ArticleItem({ article }: ArticleItemProps) {
           <div className="flex items-center">
             <Avatar className="h-6 w-6 mr-1.5">
               <AvatarImage
-                src={`/placeholder-0y3ry.png?width=24&height=24&query=user+${article.author.username}`}
+                src={article.author.avatar || "/placeholder-user.jpg"}
                 alt={article.author.username}
               />
               <AvatarFallback>{article.author.username.charAt(0).toUpperCase()}</AvatarFallback>
@@ -43,7 +43,7 @@ export default function ArticleItem({ article }: ArticleItemProps) {
         <Link href={`/articles/${article.id}`} className="text-sm text-primary hover:underline">
           阅读全文 &rarr;
         </Link>
-        {article.status === "草稿" && (
+        {article.status === "draft" && (
           <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200">
             草稿
           </Badge>

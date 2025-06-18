@@ -3,6 +3,32 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils.translation import (
     gettext_lazy as _,
 )  # django中关于i18n的一个库,用于标记需要翻译的字符串，但它会延迟翻译，直到字符串被实际使用时才进行。
+import uuid
+import os
+from urllib.parse import quote
+
+
+def user_avatar_upload_path(instance, filename):
+    """
+    自定义头像上传路径函数
+    解决中文文件名编码问题
+    """
+    ###################################################################################################
+    #[18/Jun/2025 22:19:52] "PATCH /api/users/me/avatar/ HTTP/1.1" 200 113                            #
+    #Not Found: /media/avatar/2025/06/捕获.PNG                                                        #
+    #[18/Jun/2025 22:19:53] "GET /media/avatar/2025/06/%E6%8D%95%E8%8E%B7.PNG HTTP/1.1" 404 2589      #
+    #[18/Jun/2025 22:20:10] "GET /api/users/me/ HTTP/1.1" 200 149                                    #
+    #Not Found: /media/avatar/2025/06/捕获.PNG                                                        #
+    #[18/Jun/2025 22:20:11] "GET /media/avatar/2025/06/%E6%8D%95%E8%8E%B7.PNG HTTP/1.1" 404 2589      #
+    ###################################################################################################
+    # 获取文件扩展名
+    ext = filename.split('.')[-1].lower()
+
+    # 生成唯一的文件名，避免中文字符问题
+    unique_filename = f"user_{instance.id}_avatar_{uuid.uuid4().hex[:8]}.{ext}"
+
+    # 返回上传路径
+    return f"avatars/{instance.id}/{unique_filename}"
 
 
 class UserManager(BaseUserManager):
@@ -45,7 +71,7 @@ class User(AbstractUser):
 
     email = models.EmailField(_("邮箱"), unique=True)
     bio = models.TextField(_("个人简介"), max_length=500, blank=True)
-    avatar = models.ImageField(_("头像"), upload_to="avatar/%Y/%m", blank=True)
+    avatar = models.ImageField(_("头像"), upload_to=user_avatar_upload_path, blank=True)
 
     # 使用邮箱作为用户名
     USERNAME_FIELD = "email"

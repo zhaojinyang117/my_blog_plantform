@@ -17,10 +17,14 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsCommentUserOrReadOnly]
     
     def get_queryset(self):
-        """返回某篇文章下的所有顶级评论"""
+        """返回某篇文章下的所有评论"""
         article_pk = self.kwargs.get('article_pk')
         article = get_object_or_404(Article, pk=article_pk)
-        return Comment.objects.filter(article=article, parent__isnull=True).order_by('created_at')
+        # 对于list操作，只返回顶级评论
+        if self.action == 'list':
+            return Comment.objects.filter(article=article, parent__isnull=True).order_by('created_at')
+        # 对于其他操作（retrieve, update, destroy），返回所有评论
+        return Comment.objects.filter(article=article).order_by('created_at')
 
     def perform_create(self, serializer):
         """

@@ -18,7 +18,7 @@ class ArticleModelTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123", is_active=True
         )
 
     def test_create_article(self):
@@ -108,7 +108,7 @@ class ArticleSerializerTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123", is_active=True
         )
         self.article = Article.objects.create(
             title="测试文章",
@@ -185,10 +185,10 @@ class ArticleAPITest(APITestCase):
     def setUp(self):
         """设置测试数据"""
         self.user1 = User.objects.create_user(
-            username="user1", email="user1@example.com", password="testpass123"
+            username="user1", email="user1@example.com", password="testpass123", is_active=True
         )
         self.user2 = User.objects.create_user(
-            username="user2", email="user2@example.com", password="testpass123"
+            username="user2", email="user2@example.com", password="testpass123", is_active=True
         )
 
         # 创建测试文章
@@ -412,10 +412,10 @@ class ArticlePermissionTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123", is_active=True
         )
         self.other_user = User.objects.create_user(
-            username="otheruser", email="other@example.com", password="testpass123"
+            username="otheruser", email="other@example.com", password="testpass123", is_active=True
         )
 
         self.article = Article.objects.create(
@@ -456,7 +456,7 @@ class ArticleEdgeCaseTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpass123"
+            username="testuser", email="test@example.com", password="testpass123", is_active=True
         )
 
     def test_article_with_empty_content(self):
@@ -499,8 +499,9 @@ class ArticleEdgeCaseTest(TestCase):
         self.assertIsNotNone(article.created_at)
         self.assertIsNotNone(article.updated_at)
 
-        # 创建时间应该等于更新时间（刚创建时）
-        self.assertEqual(article.created_at, article.updated_at)
+        # 创建时间应该约等于更新时间（刚创建时），允许微秒级差异
+        time_diff = abs((article.created_at - article.updated_at).total_seconds())
+        self.assertLess(time_diff, 0.1, "创建时间和更新时间差异不应超过0.1秒")
 
         # 等待一小段时间确保时间戳有差异
         time.sleep(0.01)
@@ -525,10 +526,10 @@ class ArticleQueryTest(TestCase):
     def setUp(self):
         """设置测试数据"""
         self.user1 = User.objects.create_user(
-            username="user1", email="user1@example.com", password="testpass123"
+            username="user1", email="user1@example.com", password="testpass123", is_active=True
         )
         self.user2 = User.objects.create_user(
-            username="user2", email="user2@example.com", password="testpass123"
+            username="user2", email="user2@example.com", password="testpass123", is_active=True
         )
 
         # 创建不同状态的文章
@@ -577,3 +578,536 @@ class ArticleQueryTest(TestCase):
         # 应该按创建时间倒序排列
         for i in range(len(articles) - 1):
             self.assertGreaterEqual(articles[i].created_at, articles[i + 1].created_at)
+
+
+class ArticlePermissionManagerTests(TestCase):
+    """文章权限管理器测试类"""
+
+    def setUp(self):
+        """设置测试数据"""
+        from utils.permission_manager import PermissionManager, ArticlePermissionManager
+        
+        # 将权限管理器类设置为类属性，以便在测试方法中使用
+        self.__class__.PermissionManager = PermissionManager
+        self.__class__.ArticlePermissionManager = ArticlePermissionManager
+        
+        # 创建测试用户
+        self.user1 = User.objects.create_user(
+            username="user1",
+            email="user1@example.com",
+            password="testpass123",
+            is_active=True
+        )
+        self.user2 = User.objects.create_user(
+            username="user2",
+            email="user2@example.com",
+            password="testpass123",
+            is_active=True
+        )
+        self.admin_user = User.objects.create_user(
+            username="admin",
+            email="2@2.com",
+            password="testpass123",
+            is_active=True,
+            is_staff=True
+        )
+        
+        # 创建测试文章
+        self.article1 = Article.objects.create(
+            title="测试文章1",
+            content="测试内容1",
+            author=self.user1,
+            status=Article.Status.DRAFT
+        )
+        self.article2 = Article.objects.create(
+            title="测试文章2",
+            content="测试内容2",
+            author=self.user2,
+            status=Article.Status.PUBLISHED
+        )
+        
+        # 权限管理器实例
+        self.permission_manager = PermissionManager()
+        self.article_permission_manager = ArticlePermissionManager()
+
+    def test_assign_user_permission_success(self):
+        """测试成功分配用户权限"""
+        # 分配编辑权限
+        result = self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证权限是否正确分配
+        has_permission = self.permission_manager.check_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.assertTrue(has_permission)
+
+    def test_assign_user_permission_invalid_user(self):
+        """测试分配权限给无效用户"""
+        # 使用None作为用户应该返回False
+        result = self.permission_manager.assign_user_permission(
+            None,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.assertFalse(result)
+
+    def test_check_user_permission_unauthenticated(self):
+        """测试未认证用户权限检查"""
+        from django.contrib.auth.models import AnonymousUser
+        
+        anonymous_user = AnonymousUser()
+        
+        # 未认证用户不应该有权限
+        has_permission = self.permission_manager.check_user_permission(
+            anonymous_user,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.assertFalse(has_permission)
+
+    def test_check_user_permission_admin(self):
+        """测试管理员权限检查"""
+        # 管理员应该有所有权限
+        has_permission = self.permission_manager.check_user_permission(
+            self.admin_user,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.assertTrue(has_permission)
+
+    def test_revoke_user_permission_success(self):
+        """测试成功撤销用户权限"""
+        # 先分配权限
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        # 验证权限存在
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 撤销权限
+        result = self.permission_manager.remove_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证权限已被撤销
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+
+    def test_bulk_assign_permissions_success(self):
+        """测试批量分配权限成功"""
+        permissions = [
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION
+        ]
+        
+        result = self.permission_manager.bulk_assign_permissions(
+            self.user2,
+            permissions,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证所有权限都已分配
+        for permission in permissions:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.article1
+                )
+            )
+
+    def test_bulk_assign_permissions_partial_failure(self):
+        """测试批量分配权限部分失败"""
+        # 先分配一个权限
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        # 尝试批量分配包含已存在权限的列表
+        permissions = [
+            self.ArticlePermissionManager.EDIT_PERMISSION,  # 已存在
+            self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION  # 新的
+        ]
+        
+        result = self.permission_manager.bulk_assign_permissions(
+            self.user2,
+            permissions,
+            self.article1
+        )
+        
+        # 仍然应该成功，因为Guardian会处理重复分配
+        self.assertTrue(result)
+
+    def test_transfer_ownership_success(self):
+        """测试成功转移所有权"""
+        # 为原所有者分配所有权限
+        self.article_permission_manager.assign_author_permissions(
+            self.user1,
+            self.article1
+        )
+        
+        # 验证原所有者有权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 转移所有权
+        result = self.permission_manager.transfer_ownership(
+            self.user1,
+            self.user2,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证新所有者有权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 验证原所有者权限已被撤销
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+
+    def test_transfer_ownership_specific_permissions(self):
+        """测试转移特定权限"""
+        # 为原所有者分配所有权限
+        self.article_permission_manager.assign_author_permissions(
+            self.user1,
+            self.article1
+        )
+        
+        # 只转移编辑权限
+        specific_permissions = [self.ArticlePermissionManager.EDIT_PERMISSION]
+        
+        result = self.permission_manager.transfer_ownership(
+            self.user1,
+            self.user2,
+            self.article1,
+            specific_permissions
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证新所有者有编辑权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 验证原所有者的编辑权限已被撤销
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 验证原所有者仍然有其他权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.MANAGE_PERMISSION,
+                self.article1
+            )
+        )
+
+    def test_cleanup_object_permissions_success(self):
+        """测试成功清理对象权限"""
+        # 为多个用户分配权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION,
+            self.article1
+        )
+        
+        # 验证权限存在
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 清理所有权限
+        result = self.permission_manager.cleanup_object_permissions(self.article1)
+        
+        self.assertTrue(result)
+        
+        # 验证权限已被清理（除了管理员）
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION,
+                self.article1
+            )
+        )
+
+    def test_assign_author_permissions(self):
+        """测试分配作者权限"""
+        result = self.article_permission_manager.assign_author_permissions(
+            self.user2,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证作者拥有所有权限
+        for permission in self.ArticlePermissionManager.ALL_PERMISSIONS:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.article1
+                )
+            )
+
+    def test_assign_editor_permissions(self):
+        """测试分配编辑者权限"""
+        result = self.article_permission_manager.assign_editor_permissions(
+            self.user2,
+            self.article1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证编辑者有编辑和查看草稿权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.EDIT_PERMISSION,
+                self.article1
+            )
+        )
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION,
+                self.article1
+            )
+        )
+        
+        # 验证编辑者没有发布和管理权限
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.PUBLISH_PERMISSION,
+                self.article1
+            )
+        )
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.ArticlePermissionManager.MANAGE_PERMISSION,
+                self.article1
+            )
+        )
+
+    def test_can_edit_article(self):
+        """测试检查是否可以编辑文章"""
+        # 未分配权限时不能编辑
+        self.assertFalse(
+            self.article_permission_manager.can_edit_article(
+                self.user2,
+                self.article1
+            )
+        )
+        
+        # 分配编辑权限后可以编辑
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        self.assertTrue(
+            self.article_permission_manager.can_edit_article(
+                self.user2,
+                self.article1
+            )
+        )
+
+    def test_can_publish_article(self):
+        """测试检查是否可以发布文章"""
+        # 未分配权限时不能发布
+        self.assertFalse(
+            self.article_permission_manager.can_publish_article(
+                self.user2,
+                self.article1
+            )
+        )
+        
+        # 分配发布权限后可以发布
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.PUBLISH_PERMISSION,
+            self.article1
+        )
+        
+        self.assertTrue(
+            self.article_permission_manager.can_publish_article(
+                self.user2,
+                self.article1
+            )
+        )
+
+    def test_get_users_with_permission(self):
+        """测试获取拥有特定权限的用户"""
+        # 为不同用户分配相同权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        # 获取拥有编辑权限的用户（Guardian需要简化格式权限名）
+        users_with_edit_permission = self.permission_manager.get_users_with_permission(
+            'edit_article',  # 使用简化格式而不是完整格式
+            self.article1
+        )
+        
+        # 验证返回的用户列表
+        user_ids = [user.id for user in users_with_edit_permission]
+        self.assertIn(self.user1.id, user_ids)
+        self.assertIn(self.user2.id, user_ids)
+
+    def test_get_user_permissions(self):
+        """测试获取用户对对象的所有权限"""
+        # 分配多个权限
+        permissions = [
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.ArticlePermissionManager.VIEW_DRAFT_PERMISSION
+        ]
+        
+        for permission in permissions:
+            self.permission_manager.assign_user_permission(
+                self.user1,
+                permission,
+                self.article1
+            )
+        
+        # 获取用户权限
+        user_permissions = self.permission_manager.get_user_permissions(
+            self.user1,
+            self.article1
+        )
+        
+        # 验证权限列表（Guardian返回简化格式权限名）
+        expected_simple_permissions = ['edit_article', 'view_draft_article']
+        for simple_permission in expected_simple_permissions:
+            self.assertIn(simple_permission, user_permissions)
+
+    def test_permission_edge_cases(self):
+        """测试权限边界情况"""
+        # 测试对不存在的对象分配权限
+        fake_article = Article(id=99999, title="不存在的文章", content="测试", author=self.user1)
+        
+        result = self.permission_manager.assign_user_permission(
+            self.user1,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            fake_article
+        )
+        
+        # 应该返回False，因为对象不存在于数据库中
+        self.assertFalse(result)
+
+    def test_permission_consistency(self):
+        """测试权限一致性"""
+        # 分配权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        # 多次检查权限应该返回一致结果
+        for _ in range(5):
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user1,
+                    self.ArticlePermissionManager.EDIT_PERMISSION,
+                    self.article1
+                )
+            )
+        
+        # 撤销权限
+        self.permission_manager.remove_user_permission(
+            self.user1,
+            self.ArticlePermissionManager.EDIT_PERMISSION,
+            self.article1
+        )
+        
+        # 多次检查应该返回一致的False结果
+        for _ in range(5):
+            self.assertFalse(
+                self.permission_manager.check_user_permission(
+                    self.user1,
+                    self.ArticlePermissionManager.EDIT_PERMISSION,
+                    self.article1
+                )
+            )

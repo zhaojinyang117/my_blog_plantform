@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=11.2.1",
     "requests>=2.32.3",
     "drf-nested-routers>=0.93.4",
+    "django-guardian>=3.0.0",
 ]
 
 [tool.mypy]

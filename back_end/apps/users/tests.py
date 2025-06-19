@@ -60,7 +60,7 @@ class EmailVerificationTests(TestCase):
     def setUp(self):
         """测试前的准备工作"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpassword123"
+            username="testuser", email="test@example.com", password="testpassword123", is_active=True
         )
 
     def test_generate_verification_token(self):
@@ -328,7 +328,7 @@ class UserProfileSerializerTests(TestCase):
     def setUp(self):
         """测试前的准备工作"""
         self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="testpassword123"
+            username="testuser", email="test@example.com", password="testpassword123", is_active=True
         )
 
     def test_avatar_validation_valid_image(self):
@@ -718,7 +718,7 @@ class UserAPITests(TestCase):
 
         # 创建另一个用户，用于测试用户名重复
         User.objects.create_user(
-            username="anotheruser", email="another@example.com", password="password123"
+            username="anotheruser", email="another@example.com", password="password123", is_active=True
         )
 
         # 尝试更新为已存在的用户名

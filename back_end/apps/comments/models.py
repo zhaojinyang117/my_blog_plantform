@@ -2,6 +2,7 @@ from django.db import models
 from apps.articles.models import Article
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
+from guardian.models import UserObjectPermissionAbstract, GroupObjectPermissionAbstract
 
 User = get_user_model()
 
@@ -41,9 +42,50 @@ class Comment(models.Model):
         verbose_name = _("评论")
         verbose_name_plural = _("评论")
         ordering = ['parent_id', 'created_at'] # 先按父评论分组，再按创建时间排序
+        # 自定义权限
+        permissions = [
+            # ('edit_comment', _('可以编辑评论')),  # 评论不允许编辑
+            ('moderate_comment', _('可以审核评论')),
+            ('reply_comment', _('可以回复评论')),
+            ('manage_comment', _('可以管理评论')),
+        ]
 
     def __str__(self):
         if self.parent:
             return f"回复给:{self.parent.user.username}: {self.content[:50]}{'...' if len(self.content) > 50 else ''}"
         # 显示作者用户名和评论内容的前50个字符。
         return f"{self.user.username}: {self.content[:50]}{'...' if len(self.content) > 50 else ''}"
+
+
+class CommentUserObjectPermission(UserObjectPermissionAbstract):
+    """
+    评论用户对象权限模型
+
+    用于存储用户对特定评论的权限
+    """
+    content_object = models.ForeignKey(
+        Comment,
+        on_delete=models.CASCADE,
+        verbose_name=_("评论")
+    )
+
+    class Meta:
+        verbose_name = _("评论用户权限")
+        verbose_name_plural = _("评论用户权限")
+
+
+class CommentGroupObjectPermission(GroupObjectPermissionAbstract):
+    """
+    评论组对象权限模型
+
+    用于存储用户组对特定评论的权限
+    """
+    content_object = models.ForeignKey(
+        Comment,
+        on_delete=models.CASCADE,
+        verbose_name=_("评论")
+    )
+
+    class Meta:
+        verbose_name = _("评论组权限")
+        verbose_name_plural = _("评论组权限")

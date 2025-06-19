@@ -1,3 +1,4 @@
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -23,10 +24,10 @@ class CommentAPITests(APITestCase):
     def setUp(self):
         # 创建用户
         self.user1 = User.objects.create_user(
-            username="user1", email="user1@example.com", password="password123"
+            username="user1", email="user1@example.com", password="password123", is_active=True
         )
         self.user2 = User.objects.create_user(
-            username="user2", email="user2@example.com", password="password123"
+            username="user2", email="user2@example.com", password="password123", is_active=True
         )
 
         # 创建文章
@@ -515,3 +516,665 @@ class CommentAPITests(APITestCase):
         self.assertEqual(len(results), 5)
         for status_code in results:
             self.assertEqual(status_code, status.HTTP_201_CREATED)
+
+
+class CommentPermissionManagerTests(TestCase):
+    """评论权限管理器测试类"""
+
+    def setUp(self):
+        """设置测试数据"""
+        from utils.permission_manager import PermissionManager, CommentPermissionManager
+        
+        # 将权限管理器类设置为类属性，以便在测试方法中使用
+        self.__class__.PermissionManager = PermissionManager
+        self.__class__.CommentPermissionManager = CommentPermissionManager
+        
+        # 创建测试用户
+        self.user1 = User.objects.create_user(
+            username="user1",
+            email="user1@example.com",
+            password="testpass123",
+            is_active=True
+        )
+        self.user2 = User.objects.create_user(
+            username="user2",
+            email="user2@example.com",
+            password="testpass123",
+            is_active=True
+        )
+        self.admin_user = User.objects.create_user(
+            username="admin",
+            email="admin@example.com",
+            password="testpass123",
+            is_active=True,
+            is_staff=True
+        )
+        
+        # 创建测试文章和评论
+        self.article1 = Article.objects.create(
+            title="测试文章1",
+            content="测试内容1",
+            author=self.user1
+        )
+        
+        self.comment1 = Comment.objects.create(
+            article=self.article1,
+            user=self.user1,
+            content="测试评论1"
+        )
+        
+        self.comment2 = Comment.objects.create(
+            article=self.article1,
+            user=self.user2,
+            content="测试评论2"
+        )
+        
+        # 权限管理器实例
+        self.permission_manager = PermissionManager()
+        self.comment_permission_manager = CommentPermissionManager()
+
+    def test_assign_user_permission_success(self):
+        """测试成功分配用户权限"""
+        # 分配审核权限
+        result = self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证权限是否正确分配
+        has_permission = self.permission_manager.check_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.assertTrue(has_permission)
+
+    def test_assign_user_permission_invalid_user(self):
+        """测试分配权限给无效用户"""
+        # 使用None作为用户应该返回False
+        result = self.permission_manager.assign_user_permission(
+            None,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.assertFalse(result)
+
+    def test_check_user_permission_unauthenticated(self):
+        """测试未认证用户权限检查"""
+        from django.contrib.auth.models import AnonymousUser
+        
+        anonymous_user = AnonymousUser()
+        
+        # 未认证用户不应该有权限
+        has_permission = self.permission_manager.check_user_permission(
+            anonymous_user,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.assertFalse(has_permission)
+
+    def test_check_user_permission_admin(self):
+        """测试管理员权限检查"""
+        # 管理员应该有所有权限
+        has_permission = self.permission_manager.check_user_permission(
+            self.admin_user,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.assertTrue(has_permission)
+
+    def test_revoke_user_permission_success(self):
+        """测试成功撤销用户权限"""
+        # 先分配权限
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        # 验证权限存在
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.CommentPermissionManager.MODERATE_PERMISSION,
+                self.comment1
+            )
+        )
+        
+        # 撤销权限
+        result = self.permission_manager.remove_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证权限已被撤销
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.CommentPermissionManager.MODERATE_PERMISSION,
+                self.comment1
+            )
+        )
+
+    def test_bulk_assign_permissions_success(self):
+        """测试批量分配权限成功"""
+        permissions = [
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.CommentPermissionManager.REPLY_PERMISSION
+        ]
+        
+        result = self.permission_manager.bulk_assign_permissions(
+            self.user2,
+            permissions,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证所有权限都已分配
+        for permission in permissions:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.comment1
+                )
+            )
+
+    def test_bulk_remove_permissions_success(self):
+        """测试批量撤销权限成功"""
+        permissions = [
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.CommentPermissionManager.REPLY_PERMISSION
+        ]
+        
+        # 先分配权限
+        self.permission_manager.bulk_assign_permissions(
+            self.user2,
+            permissions,
+            self.comment1
+        )
+        
+        # 验证权限存在
+        for permission in permissions:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.comment1
+                )
+            )
+        
+        # 批量撤销权限
+        result = self.permission_manager.bulk_remove_permissions(
+            self.user2,
+            permissions,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证权限已被撤销
+        for permission in permissions:
+            self.assertFalse(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.comment1
+                )
+            )
+
+    def test_transfer_ownership_success(self):
+        """测试成功转移所有权"""
+        # 为原所有者分配权限
+        self.comment_permission_manager.assign_author_permissions(
+            self.user1,
+            self.comment1
+        )
+        
+        # 验证原所有者有权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.CommentPermissionManager.MANAGE_PERMISSION,
+                self.comment1
+            )
+        )
+        
+        # 转移所有权
+        result = self.permission_manager.transfer_ownership(
+            self.user1,
+            self.user2,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证新所有者有权限
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.CommentPermissionManager.MANAGE_PERMISSION,
+                self.comment1
+            )
+        )
+        
+        # 验证原所有者权限已被撤销
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.CommentPermissionManager.MANAGE_PERMISSION,
+                self.comment1
+            )
+        )
+
+    def test_cleanup_object_permissions_success(self):
+        """测试成功清理对象权限"""
+        # 为多个用户分配权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.REPLY_PERMISSION,
+            self.comment1
+        )
+        
+        # 验证权限存在
+        self.assertTrue(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.CommentPermissionManager.MODERATE_PERMISSION,
+                self.comment1
+            )
+        )
+        
+        # 清理所有权限
+        result = self.permission_manager.cleanup_object_permissions(self.comment1)
+        
+        self.assertTrue(result)
+        
+        # 验证权限已被清理（除了管理员）
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user1,
+                self.CommentPermissionManager.MODERATE_PERMISSION,
+                self.comment1
+            )
+        )
+        self.assertFalse(
+            self.permission_manager.check_user_permission(
+                self.user2,
+                self.CommentPermissionManager.REPLY_PERMISSION,
+                self.comment1
+            )
+        )
+
+    def test_assign_author_permissions(self):
+        """测试分配作者权限"""
+        result = self.comment_permission_manager.assign_author_permissions(
+            self.user2,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证作者拥有回复和管理权限
+        expected_permissions = [
+            self.CommentPermissionManager.REPLY_PERMISSION,
+            self.CommentPermissionManager.MANAGE_PERMISSION
+        ]
+        
+        for permission in expected_permissions:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.comment1
+                )
+            )
+
+    def test_assign_moderator_permissions(self):
+        """测试分配审核员权限"""
+        result = self.comment_permission_manager.assign_moderator_permissions(
+            self.user2,
+            self.comment1
+        )
+        
+        self.assertTrue(result)
+        
+        # 验证审核员拥有所有权限
+        for permission in self.CommentPermissionManager.ALL_PERMISSIONS:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    permission,
+                    self.comment1
+                )
+            )
+
+    def test_can_moderate_comment(self):
+        """测试检查是否可以审核评论"""
+        # 未分配权限时不能审核
+        self.assertFalse(
+            self.comment_permission_manager.can_moderate_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+        
+        # 分配审核权限后可以审核
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        self.assertTrue(
+            self.comment_permission_manager.can_moderate_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+
+    def test_can_reply_comment(self):
+        """测试检查是否可以回复评论"""
+        # 未分配权限时不能回复
+        self.assertFalse(
+            self.comment_permission_manager.can_reply_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+        
+        # 分配回复权限后可以回复
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.REPLY_PERMISSION,
+            self.comment1
+        )
+        
+        self.assertTrue(
+            self.comment_permission_manager.can_reply_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+
+    def test_can_manage_comment(self):
+        """测试检查是否可以管理评论"""
+        # 未分配权限时不能管理
+        self.assertFalse(
+            self.comment_permission_manager.can_manage_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+        
+        # 分配管理权限后可以管理
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MANAGE_PERMISSION,
+            self.comment1
+        )
+        
+        self.assertTrue(
+            self.comment_permission_manager.can_manage_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+
+    def test_get_users_with_permission(self):
+        """测试获取拥有特定权限的用户"""
+        # 为不同用户分配相同权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        self.permission_manager.assign_user_permission(
+            self.user2,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        # 获取拥有审核权限的用户（Guardian需要简化格式权限名）
+        users_with_moderate_permission = self.permission_manager.get_users_with_permission(
+            'moderate_comment',  # 使用简化格式而不是完整格式
+            self.comment1
+        )
+        
+        # 验证返回的用户列表
+        user_ids = [user.id for user in users_with_moderate_permission]
+        self.assertIn(self.user1.id, user_ids)
+        self.assertIn(self.user2.id, user_ids)
+
+    def test_get_user_permissions(self):
+        """测试获取用户对对象的所有权限"""
+        # 分配多个权限
+        permissions = [
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.CommentPermissionManager.REPLY_PERMISSION
+        ]
+        
+        for permission in permissions:
+            self.permission_manager.assign_user_permission(
+                self.user1,
+                permission,
+                self.comment1
+            )
+        
+        # 获取用户权限
+        user_permissions = self.permission_manager.get_user_permissions(
+            self.user1,
+            self.comment1
+        )
+        
+        # 验证权限列表（Guardian返回简化格式，不包含app前缀）
+        expected_short_permissions = [
+            'moderate_comment',  # 而不是 'comments.moderate_comment'
+            'reply_comment'      # 而不是 'comments.reply_comment'
+        ]
+        for permission in expected_short_permissions:
+            self.assertIn(permission, user_permissions)
+
+    def test_comment_permission_edge_cases(self):
+        """测试评论权限边界情况"""
+        # 测试对不存在的对象分配权限
+        fake_comment = Comment(
+            id=99999,
+            content="不存在的评论",
+            user=self.user1,
+            article=self.article1
+        )
+        
+        result = self.permission_manager.assign_user_permission(
+            self.user1,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            fake_comment
+        )
+        
+        # 应该返回False，因为对象不存在于数据库中
+        self.assertFalse(result)
+
+    def test_comment_permission_consistency(self):
+        """测试评论权限一致性"""
+        # 分配权限
+        self.permission_manager.assign_user_permission(
+            self.user1,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        # 多次检查权限应该返回一致结果
+        for _ in range(5):
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user1,
+                    self.CommentPermissionManager.MODERATE_PERMISSION,
+                    self.comment1
+                )
+            )
+        
+        # 撤销权限
+        self.permission_manager.remove_user_permission(
+            self.user1,
+            self.CommentPermissionManager.MODERATE_PERMISSION,
+            self.comment1
+        )
+        
+        # 多次检查应该返回一致的False结果
+        for _ in range(5):
+            self.assertFalse(
+                self.permission_manager.check_user_permission(
+                    self.user1,
+                    self.CommentPermissionManager.MODERATE_PERMISSION,
+                    self.comment1
+                )
+            )
+
+    def test_comment_specific_scenarios(self):
+        """测试评论特定场景"""
+        # 测试评论作者默认权限
+        original_author = self.comment1.user
+        
+        # 为原作者分配权限
+        self.comment_permission_manager.assign_author_permissions(
+            original_author,
+            self.comment1
+        )
+        
+        # 验证原作者有管理权限
+        self.assertTrue(
+            self.comment_permission_manager.can_manage_comment(
+                original_author,
+                self.comment1
+            )
+        )
+        
+        # 验证原作者有回复权限
+        self.assertTrue(
+            self.comment_permission_manager.can_reply_comment(
+                original_author,
+                self.comment1
+            )
+        )
+        
+        # 验证其他用户没有管理权限
+        self.assertFalse(
+            self.comment_permission_manager.can_manage_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+
+    def test_moderator_vs_author_permissions(self):
+        """测试审核员与作者权限差异"""
+        # 为用户分配作者权限
+        self.comment_permission_manager.assign_author_permissions(
+            self.user1,
+            self.comment1
+        )
+        
+        # 为另一个用户分配审核员权限
+        self.comment_permission_manager.assign_moderator_permissions(
+            self.user2,
+            self.comment1
+        )
+        
+        # 审核员应该有审核权限，作者没有
+        self.assertTrue(
+            self.comment_permission_manager.can_moderate_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+        self.assertFalse(
+            self.comment_permission_manager.can_moderate_comment(
+                self.user1,
+                self.comment1
+            )
+        )
+        
+        # 两者都应该有回复权限
+        self.assertTrue(
+            self.comment_permission_manager.can_reply_comment(
+                self.user1,
+                self.comment1
+            )
+        )
+        self.assertTrue(
+            self.comment_permission_manager.can_reply_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+        
+        # 两者都应该有管理权限
+        self.assertTrue(
+            self.comment_permission_manager.can_manage_comment(
+                self.user1,
+                self.comment1
+            )
+        )
+        self.assertTrue(
+            self.comment_permission_manager.can_manage_comment(
+                self.user2,
+                self.comment1
+            )
+        )
+
+    def test_bulk_operations_performance(self):
+        """测试批量操作性能和正确性"""
+        # 创建多个评论
+        comments = []
+        for i in range(10):
+            comment = Comment.objects.create(
+                article=self.article1,
+                user=self.user1,
+                content=f"测试评论 {i}"
+            )
+            comments.append(comment)
+        
+        # 为每个评论分配权限
+        for comment in comments:
+            result = self.permission_manager.assign_user_permission(
+                self.user2,
+                self.CommentPermissionManager.MODERATE_PERMISSION,
+                comment
+            )
+            self.assertTrue(result)
+        
+        # 验证所有权限都已分配
+        for comment in comments:
+            self.assertTrue(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    self.CommentPermissionManager.MODERATE_PERMISSION,
+                    comment
+                )
+            )
+        
+        # 清理所有权限
+        for comment in comments:
+            result = self.permission_manager.cleanup_object_permissions(comment)
+            self.assertTrue(result)
+        
+        # 验证权限已被清理
+        for comment in comments:
+            self.assertFalse(
+                self.permission_manager.check_user_permission(
+                    self.user2,
+                    self.CommentPermissionManager.MODERATE_PERMISSION,
+                    comment
+                )
+            )

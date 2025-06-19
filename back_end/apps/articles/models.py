@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
+from guardian.models import UserObjectPermissionAbstract, GroupObjectPermissionAbstract
 
 User = get_user_model()
 
@@ -32,6 +33,47 @@ class Article(models.Model):
         verbose_name = _("文章")
         verbose_name_plural = _("文章")
         ordering = ["-created_at"]
+        # 自定义权限
+        permissions = [
+            ('edit_article', _('可以编辑文章')),
+            ('publish_article', _('可以发布文章')),
+            ('view_draft_article', _('可以查看草稿文章')),
+            ('manage_article', _('可以管理文章')),
+        ]
 
     def __str__(self):
         return str(self.title)
+
+
+class ArticleUserObjectPermission(UserObjectPermissionAbstract):
+    """
+    文章用户对象权限模型
+
+    用于存储用户对特定文章的权限
+    """
+    content_object = models.ForeignKey(
+        Article,
+        on_delete=models.CASCADE,
+        verbose_name=_("文章")
+    )
+
+    class Meta:
+        verbose_name = _("文章用户权限")
+        verbose_name_plural = _("文章用户权限")
+
+
+class ArticleGroupObjectPermission(GroupObjectPermissionAbstract):
+    """
+    文章组对象权限模型
+
+    用于存储用户组对特定文章的权限
+    """
+    content_object = models.ForeignKey(
+        Article,
+        on_delete=models.CASCADE,
+        verbose_name=_("文章")
+    )
+
+    class Meta:
+        verbose_name = _("文章组权限")
+        verbose_name_plural = _("文章组权限")

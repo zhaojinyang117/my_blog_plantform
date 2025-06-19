@@ -11,6 +11,13 @@ class Comment(models.Model):
     评论模型
     需要关联文章, 需要关联用户
     """
+    
+    # 审核状态选择
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', _('待审核')),
+        ('approved', _('已通过')),
+        ('rejected', _('已拒绝')),
+    ]
     # 关联文章 当文章被删除时，相关的评论也会被级联删除
     article = models.ForeignKey(
         Article,
@@ -28,6 +35,14 @@ class Comment(models.Model):
     
     content = models.TextField(_("内容")) # 第一个位置参数就是 verbose_name
     created_at = models.DateTimeField(_("创建时间"), auto_now_add=True)
+    
+    # 审核状态字段
+    status = models.CharField(
+        _("审核状态"),
+        max_length=10,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='pending'
+    )
 
     parent = models.ForeignKey(
         "self",

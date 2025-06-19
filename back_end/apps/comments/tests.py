@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from apps.articles.models import Article  # 假设文章模型在此
 from .models import Comment
 from rest_framework_simplejwt.tokens import AccessToken
+from utils.text_filter import SensitiveWordFilter, CommentContentFilter, filter_comment_content
 import threading
 
 User = get_user_model()
@@ -1178,3 +1179,341 @@ class CommentPermissionManagerTests(TestCase):
                     comment
                 )
             )
+
+
+class SensitiveWordFilterTests(TestCase):
+    """敏感词过滤器测试类"""
+    
+    def setUp(self):
+        """设置测试数据"""
+        self.filter = SensitiveWordFilter()
+    
+    def test_contains_sensitive_words_true(self):
+        """测试检测包含敏感词的文本"""
+        test_text = "这里有垃圾内容需要过滤"
+        result = self.filter.contains_sensitive_words(test_text)
+        self.assertTrue(result)
+    
+    def test_contains_sensitive_words_false(self):
+        """测试检测不包含敏感词的文本"""
+        test_text = "这是一条正常的评论内容"
+        result = self.filter.contains_sensitive_words(test_text)
+        self.assertFalse(result)
+    
+    def test_find_sensitive_words(self):
+        """测试查找敏感词"""
+        test_text = "这里有垃圾内容和广告信息"
+        words = self.filter.find_sensitive_words(test_text)
+        self.assertIn('垃圾内容', words)
+        self.assertIn('广告', words)
+    
+    def test_filter_text(self):
+        """测试过滤文本"""
+        test_text = "这里有垃圾内容需要过滤"
+        filtered = self.filter.filter_text(test_text)
+        self.assertIn('***', filtered)
+        self.assertNotIn('垃圾内容', filtered)
+    
+    def test_add_custom_words(self):
+        """测试添加自定义敏感词"""
+        custom_word = "自定义敏感词"
+        self.filter.add_words([custom_word])
+        
+        test_text = f"这里有{custom_word}需要过滤"
+        result = self.filter.contains_sensitive_words(test_text)
+        self.assertTrue(result)
+    
+    def test_empty_text(self):
+        """测试空文本"""
+        result = self.filter.contains_sensitive_words("")
+        self.assertFalse(result)
+        
+        result = self.filter.filter_text("")
+        self.assertEqual(result, "")
+
+
+class CommentContentFilterTests(TestCase):
+    """评论内容过滤器测试类"""
+    
+    def setUp(self):
+        """设置测试数据"""
+        self.filter = CommentContentFilter()
+    
+    def test_normal_content(self):
+        """测试正常内容"""
+        test_content = "这是一条正常的评论内容"
+        result = filter_comment_content(test_content)
+        
+        self.assertTrue(result['is_valid'])
+        self.assertTrue(result['should_auto_approve'])
+        self.assertEqual(len(result['issues']), 0)
+        self.assertEqual(result['filtered_content'], test_content)
+    
+    def test_sensitive_content(self):
+        """测试包含敏感词的内容"""
+        test_content = "这里有垃圾内容需要审核"
+        result = filter_comment_content(test_content)
+        
+        self.assertTrue(result['is_valid'])
+        self.assertFalse(result['should_auto_approve'])
+        self.assertIn('包含敏感词，需要人工审核', result['issues'])
+        self.assertNotEqual(result['filtered_content'], result['original_content'])
+    
+    def test_empty_content(self):
+        """测试空内容"""
+        result = filter_comment_content("")
+        
+        self.assertFalse(result['is_valid'])
+        self.assertIn('评论内容不能为空', result['issues'])
+    
+    def test_whitespace_content(self):
+        """测试只包含空白字符的内容"""
+        result = filter_comment_content("   \n\t   ")
+        
+        self.assertFalse(result['is_valid'])
+        self.assertIn('评论内容不能为空', result['issues'])
+    
+    def test_too_long_content(self):
+        """测试超长内容"""
+        long_content = "a" * 1001  # 假设最大长度为1000
+        result = filter_comment_content(long_content)
+        
+        self.assertFalse(result['is_valid'])
+        self.assertTrue(any('不能超过' in issue for issue in result['issues']))
+    
+    def test_spam_content(self):
+        """测试垃圾内容（连续字符）"""
+        spam_content = "aaaaa这是垃圾内容"
+        result = filter_comment_content(spam_content)
+        
+        self.assertTrue(result['is_valid'])
+        self.assertFalse(result['should_auto_approve'])
+        self.assertIn('可能包含垃圾内容，需要人工审核', result['issues'])
+
+
+class CommentApprovalTests(APITestCase):
+    """评论审核测试类"""
+    
+    def setUp(self):
+        """设置测试数据"""
+        # 创建用户
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123",
+            is_active=True
+        )
+        self.admin_user = User.objects.create_user(
+            username="admin",
+            email="admin@example.com",
+            password="adminpass123",
+            is_active=True,
+            is_staff=True,
+            is_superuser=True
+        )
+        
+        # 创建文章
+        self.article = Article.objects.create(
+            title="测试文章",
+            content="测试内容",
+            author=self.user
+        )
+        
+        # 生成JWT token
+        self.user_token = str(AccessToken.for_user(self.user))
+        self.admin_token = str(AccessToken.for_user(self.admin_user))
+        
+        # API URL
+        self.comments_url = reverse(
+            "article-comments-list",
+            kwargs={"article_pk": self.article.pk}
+        )
+    
+    def test_create_normal_comment_auto_approved(self):
+        """测试创建正常评论会自动审核通过"""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_token}")
+        
+        data = {"content": "这是一条正常的评论"}
+        response = self.client.post(self.comments_url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], 'approved')
+        self.assertEqual(response.data['status_display'], '已通过')
+        
+        # 验证数据库中的状态
+        comment = Comment.objects.get(id=response.data['id'])
+        self.assertEqual(comment.status, 'approved')
+    
+    def test_create_sensitive_comment_pending_approval(self):
+        """测试创建包含敏感词的评论需要审核"""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_token}")
+        
+        data = {"content": "这里有垃圾内容需要审核"}
+        response = self.client.post(self.comments_url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], 'pending')
+        self.assertEqual(response.data['status_display'], '待审核')
+        
+        # 验证敏感词被过滤
+        self.assertIn('***', response.data['content'])
+        
+        # 验证数据库中的状态
+        comment = Comment.objects.get(id=response.data['id'])
+        self.assertEqual(comment.status, 'pending')
+    
+    def test_comment_visibility_for_different_users(self):
+        """测试不同用户的评论可见性"""
+        # 创建一个待审核的评论
+        pending_comment = Comment.objects.create(
+            article=self.article,
+            user=self.user,
+            content="待审核的评论",
+            status='pending'
+        )
+        
+        # 创建一个已通过的评论
+        approved_comment = Comment.objects.create(
+            article=self.article,
+            user=self.user,
+            content="已通过的评论",
+            status='approved'
+        )
+        
+        # 测试匿名用户只能看到已通过的评论
+        response = self.client.get(self.comments_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        comment_ids = [c['id'] for c in response.data['results']]
+        self.assertIn(approved_comment.id, comment_ids)
+        self.assertNotIn(pending_comment.id, comment_ids)
+        
+        # 测试评论作者可以看到自己的所有评论
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_token}")
+        response = self.client.get(self.comments_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        comment_ids = [c['id'] for c in response.data['results']]
+        self.assertIn(approved_comment.id, comment_ids)
+        self.assertIn(pending_comment.id, comment_ids)
+        
+        # 测试管理员可以看到所有评论
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_token}")
+        response = self.client.get(self.comments_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        comment_ids = [c['id'] for c in response.data['results']]
+        self.assertIn(approved_comment.id, comment_ids)
+        self.assertIn(pending_comment.id, comment_ids)
+    
+    def test_comment_status_field_in_response(self):
+        """测试API响应中包含状态字段"""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_token}")
+        
+        data = {"content": "测试评论"}
+        response = self.client.post(self.comments_url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('status', response.data)
+        self.assertIn('status_display', response.data)
+        
+        # 验证状态字段的值
+        self.assertIn(response.data['status'], ['pending', 'approved', 'rejected'])
+        self.assertIsInstance(response.data['status_display'], str)
+    
+    def test_content_validation_error_messages(self):
+        """测试内容验证错误消息"""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_token}")
+        
+        # 测试空内容
+        data = {"content": ""}
+        response = self.client.post(self.comments_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('content', response.data)
+        
+        # 测试超长内容
+        data = {"content": "a" * 1001}
+        response = self.client.post(self.comments_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('content', response.data)
+
+
+class CommentModelStatusTests(TestCase):
+    """评论模型状态字段测试类"""
+    
+    def setUp(self):
+        """设置测试数据"""
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpass123"
+        )
+        self.article = Article.objects.create(
+            title="测试文章",
+            content="测试内容",
+            author=self.user
+        )
+    
+    def test_comment_status_choices(self):
+        """测试评论状态选择"""
+        choices = Comment.APPROVAL_STATUS_CHOICES
+        expected_choices = [
+            ('pending', '待审核'),
+            ('approved', '已通过'),
+            ('rejected', '已拒绝')
+        ]
+        self.assertEqual(choices, expected_choices)
+    
+    def test_comment_default_status(self):
+        """测试评论默认状态"""
+        comment = Comment.objects.create(
+            article=self.article,
+            user=self.user,
+            content="测试评论"
+        )
+        self.assertEqual(comment.status, 'pending')
+    
+    def test_comment_status_update(self):
+        """测试评论状态更新"""
+        comment = Comment.objects.create(
+            article=self.article,
+            user=self.user,
+            content="测试评论",
+            status='pending'
+        )
+        
+        # 更新为已通过
+        comment.status = 'approved'
+        comment.save()
+        
+        comment.refresh_from_db()
+        self.assertEqual(comment.status, 'approved')
+    
+    def test_get_status_display(self):
+        """测试状态显示方法"""
+        comment = Comment.objects.create(
+            article=self.article,
+            user=self.user,
+            content="测试评论",
+            status='pending'
+        )
+        
+        self.assertEqual(comment.get_status_display(), '待审核')
+        
+        comment.status = 'approved'
+        comment.save()
+        self.assertEqual(comment.get_status_display(), '已通过')
+        
+        comment.status = 'rejected'
+        comment.save()
+        self.assertEqual(comment.get_status_display(), '已拒绝')
+    
+    def test_comment_with_all_statuses(self):
+        """测试所有状态的评论创建"""
+        statuses = ['pending', 'approved', 'rejected']
+        
+        for status_value in statuses:
+            comment = Comment.objects.create(
+                article=self.article,
+                user=self.user,
+                content=f"测试评论 - {status_value}",
+                status=status_value
+            )
+            self.assertEqual(comment.status, status_value)

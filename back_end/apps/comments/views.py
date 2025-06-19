@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework import serializers
+from django.db import models
 from .models import Comment, Article
 from .serializers import CommentSerializer
 from .permissions import IsCommentUserOrReadOnly
@@ -25,13 +26,27 @@ class CommentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         返回某篇文章下的所有评论
-        集成权限检查
+        集成权限检查和审核状态过滤
         """
         article_pk = self.kwargs.get('article_pk')
         article = get_object_or_404(Article, pk=article_pk)
 
         # 基础查询集
         base_queryset = Comment.objects.filter(article=article).select_related('user', 'parent')
+        
+        # 审核状态过滤逻辑
+        user = self.request.user
+        if user.is_authenticated and (user.is_staff or user.is_superuser):
+            # 管理员可以看到所有状态的评论
+            pass
+        elif user.is_authenticated:
+            # 登录用户可以看到已通过的评论和自己的评论
+            base_queryset = base_queryset.filter(
+                models.Q(status='approved') | models.Q(user=user)
+            )
+        else:
+            # 匿名用户只能看到已通过的评论
+            base_queryset = base_queryset.filter(status='approved')
 
         # 对于list操作，只返回顶级评论
         if self.action == 'list':

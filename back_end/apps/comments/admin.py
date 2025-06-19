@@ -40,6 +40,7 @@ class CommentAdmin(GuardedModelAdmin):
         'get_author_link',
         'get_article_link',
         'get_parent_info',
+        'get_status_display',
         'created_at',
         'get_replies_count',
         'permission_info'
@@ -48,6 +49,7 @@ class CommentAdmin(GuardedModelAdmin):
     # 列表过滤器
     list_filter = (
         'created_at',
+        'status',  # 审核状态过滤
         'article__status',
         CommentTypeFilter,  # 区分主评论和回复
     )
@@ -142,7 +144,14 @@ class CommentAdmin(GuardedModelAdmin):
     obj_perms_manage_template = "admin/comments/comment/obj_perms_manage.html"
 
     # 批量操作
-    actions = ['delete_selected_comments', 'mark_as_spam', 'assign_moderator_permissions']
+    actions = [
+        'delete_selected_comments',
+        'mark_as_spam',
+        'assign_moderator_permissions',
+        'approve_comments',  # 批量审核通过
+        'reject_comments',   # 批量审核拒绝
+        'reset_to_pending'   # 重置为待审核
+    ]
 
     def permission_info(self, obj):
         """
@@ -187,6 +196,24 @@ class CommentAdmin(GuardedModelAdmin):
         self.message_user(request, f"成功为 {count} 条评论分配审核权限")
 
     assign_moderator_permissions.short_description = "为选中评论分配审核权限"
+
+    def approve_comments(self, request, queryset):
+        """批量审核通过评论"""
+        count = queryset.update(status='approved')
+        self.message_user(request, f'成功审核通过 {count} 条评论。')
+    approve_comments.short_description = '批量审核通过'
+
+    def reject_comments(self, request, queryset):
+        """批量拒绝评论"""
+        count = queryset.update(status='rejected')
+        self.message_user(request, f'成功拒绝 {count} 条评论。')
+    reject_comments.short_description = '批量拒绝评论'
+
+    def reset_to_pending(self, request, queryset):
+        """重置为待审核状态"""
+        count = queryset.update(status='pending')
+        self.message_user(request, f'成功将 {count} 条评论重置为待审核状态。')
+    reset_to_pending.short_description = '重置为待审核'
 
     def has_change_permission(self, request, obj=None):
         """
@@ -265,9 +292,3 @@ class CommentGroupObjectPermissionAdmin(admin.ModelAdmin):
         """
         return super().get_queryset(request).select_related("group", "content_object", "permission")
 
-    # 自定义查询集优化
-    def get_queryset(self, request):
-        """优化查询性能"""
-        return super().get_queryset(request).select_related(
-            'user', 'article', 'parent', 'parent__user'
-        ).prefetch_related('replies')

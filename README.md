@@ -490,7 +490,7 @@ class ArticleListView(ListAPIView):
           self.assertEqual(response.status_code, 201)
   ```
 
-#### **2. 性能优化**  
+#### ✅**2. 性能优化**  
 
 - 使用 `select_related` 优化查询  
 

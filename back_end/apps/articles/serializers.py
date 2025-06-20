@@ -50,3 +50,30 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "author", "created_at", "updated_at"]
+
+
+class ArticleSearchSerializer(serializers.ModelSerializer):
+    """搜索结果序列化器 - 简化版本，用于搜索结果展示"""
+
+    author = AuthorSerializer(read_only=True)
+    # 重写content字段，返回摘要而不是完整内容
+    content = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Article
+        fields = [
+            "id",
+            "title",
+            "content",  # 返回内容摘要
+            "author",
+            "created_at",
+            "status",
+            "view_count",
+        ]
+        read_only_fields = ["id", "created_at", "author", "view_count"]
+
+    def get_content(self, obj):
+        """获取内容摘要，限制在200个字符内"""
+        if obj.content and len(obj.content) > 200:
+            return obj.content[:200] + "..."
+        return obj.content or ""

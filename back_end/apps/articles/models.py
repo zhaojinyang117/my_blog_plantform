@@ -47,6 +47,14 @@ class Article(models.Model):
             ('view_draft_article', _('可以查看草稿文章')),
             ('manage_article', _('可以管理文章')),
         ]
+        # 搜索优化：添加数据库索引
+        indexes = [
+            models.Index(fields=['-created_at']),  # 按创建时间排序的索引
+            models.Index(fields=['status', '-created_at']),  # 状态+时间组合索引
+            models.Index(fields=['author', 'status']),  # 作者+状态组合索引
+            models.Index(fields=['-view_count']),  # 按访问量排序的索引
+            models.Index(fields=['title']),  # 标题搜索索引
+        ]
 
     def __str__(self):
         return str(self.title)

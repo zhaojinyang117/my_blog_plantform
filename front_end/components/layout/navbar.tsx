@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { LogIn, LogOut, UserIcon, Newspaper, AlertCircle, Menu, X, BarChart } from "lucide-react"
 import { usePathname } from "next/navigation"
+import SearchBox from "@/components/search/search-box"
 
 export default function Navbar() {
   const { isAuthenticated, user, logout, isLoading } = useAuth()
@@ -50,6 +51,15 @@ export default function Navbar() {
                 </>
               )}
             </nav>
+          </div>
+
+          {/* 中间搜索框 */}
+          <div className="hidden md:flex flex-1 max-w-md mx-4">
+            <SearchBox
+              placeholder="搜索文章..."
+              className="w-full"
+              showSuggestions={false}
+            />
           </div>
 
           {/* 右侧用户操作区域 */}
@@ -104,6 +114,15 @@ export default function Navbar() {
               </SheetTrigger>
               <SheetContent side="right" className="w-[300px] sm:hidden">
                 <div className="flex flex-col space-y-4 mt-6">
+                  {/* 移动端搜索框 */}
+                  <div className="px-3">
+                    <SearchBox
+                      placeholder="搜索文章..."
+                      className="w-full"
+                      showSuggestions={false}
+                    />
+                  </div>
+
                   {/* 移动端导航链接 */}
                   <nav className="flex flex-col space-y-2">
                     <Link

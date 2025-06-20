@@ -5,9 +5,10 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Article
-from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer
+from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer, ArticleSearchSerializer
 from datetime import datetime
 from django.utils import timezone
+from utils.search import SearchQueryBuilder, SearchCache, validate_search_params
 
 User = get_user_model()
 
@@ -1332,3 +1333,307 @@ class ArticlePermissionManagerTests(TestCase):
                     self.article1
                 )
             )
+
+
+class SearchQueryBuilderTest(TestCase):
+    """搜索查询构建器测试"""
+
+    def setUp(self):
+        self.builder = SearchQueryBuilder(Article)
+
+    def test_add_text_search(self):
+        """测试文本搜索条件添加"""
+        query = "Django"
+        fields = ['title', 'content']
+
+        self.builder.add_text_search(query, fields)
+        conditions = self.builder.build()
+
+        self.assertIsNotNone(conditions)
+
+    def test_clean_query(self):
+        """测试查询关键词清理"""
+        # 测试特殊字符清理
+        dirty_query = "Django@#$%^&*()测试"
+        cleaned = self.builder._clean_query(dirty_query)
+        self.assertEqual(cleaned, "Django 测试")
+
+        # 测试空格处理
+        spaced_query = "  Django   测试  "
+        cleaned = self.builder._clean_query(spaced_query)
+        self.assertEqual(cleaned, "Django 测试")
+
+    def test_add_exact_match(self):
+        """测试精确匹配条件"""
+        self.builder.add_exact_match('status', 'published')
+        conditions = self.builder.build()
+
+        self.assertIsNotNone(conditions)
+
+    def test_add_range_filter(self):
+        """测试范围过滤条件"""
+        self.builder.add_range_filter('view_count', min_value=10, max_value=100)
+        conditions = self.builder.build()
+
+        self.assertIsNotNone(conditions)
+
+
+class SearchValidationTest(TestCase):
+    """搜索参数验证测试"""
+
+    def test_valid_search_params(self):
+        """测试有效的搜索参数"""
+        is_valid, error = validate_search_params("Django", "all", "-created_at")
+        self.assertTrue(is_valid)
+        self.assertEqual(error, "")
+
+    def test_empty_query(self):
+        """测试空搜索关键词"""
+        is_valid, error = validate_search_params("", "all", "-created_at")
+        self.assertFalse(is_valid)
+        self.assertIn("搜索关键词不能为空", error)
+
+    def test_long_query(self):
+        """测试过长的搜索关键词"""
+        long_query = "a" * 101
+        is_valid, error = validate_search_params(long_query, "all", "-created_at")
+        self.assertFalse(is_valid)
+        self.assertIn("搜索关键词过长", error)
+
+    def test_invalid_search_type(self):
+        """测试无效的搜索类型"""
+        is_valid, error = validate_search_params("Django", "invalid", "-created_at")
+        self.assertFalse(is_valid)
+        self.assertIn("无效的搜索类型", error)
+
+    def test_invalid_ordering(self):
+        """测试无效的排序方式"""
+        is_valid, error = validate_search_params("Django", "all", "invalid")
+        self.assertFalse(is_valid)
+        self.assertIn("无效的排序方式", error)
+
+
+class ArticleSearchAPITest(APITestCase):
+    """文章搜索API测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+
+        # 创建测试用户
+        self.user1 = User.objects.create_user(
+            username='testuser1',
+            email='test1@example.com',
+            password='testpass123'
+        )
+        self.user2 = User.objects.create_user(
+            username='testuser2',
+            email='test2@example.com',
+            password='testpass123'
+        )
+
+        # 创建测试文章
+        self.article1 = Article.objects.create(
+            title='Django Web开发',
+            content='这是一篇关于Django框架的文章，介绍了如何使用Django进行Web开发。',
+            author=self.user1,
+            status=Article.Status.PUBLISHED,
+            view_count=100
+        )
+
+        self.article2 = Article.objects.create(
+            title='Python编程基础',
+            content='Python是一种强大的编程语言，适合初学者学习。',
+            author=self.user2,
+            status=Article.Status.PUBLISHED,
+            view_count=50
+        )
+
+        self.article3 = Article.objects.create(
+            title='React前端开发',
+            content='React是一个用于构建用户界面的JavaScript库。',
+            author=self.user1,
+            status=Article.Status.PUBLISHED,
+            view_count=200
+        )
+
+        # 创建草稿文章（不应该在搜索结果中出现）
+        self.draft_article = Article.objects.create(
+            title='草稿文章',
+            content='这是一篇草稿文章，不应该在搜索结果中出现。',
+            author=self.user1,
+            status=Article.Status.DRAFT
+        )
+
+    def test_search_by_title(self):
+        """测试按标题搜索"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'Django', 'type': 'title'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], self.article1.id)
+
+    def test_search_by_content(self):
+        """测试按内容搜索"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'Python', 'type': 'content'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], self.article2.id)
+
+    def test_search_by_author(self):
+        """测试按作者搜索"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'testuser1', 'type': 'author'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)  # article1 和 article3
+
+    def test_search_all_types(self):
+        """测试全类型搜索"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'Django', 'type': 'all'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], self.article1.id)
+
+    def test_search_ordering_by_view_count(self):
+        """测试按访问量排序"""
+        url = reverse('article-search')
+        response = self.client.get(url, {
+            'q': '开发',  # 匹配article1和article3
+            'type': 'all',
+            'ordering': '-view_count'
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)
+        # article3的访问量更高，应该排在前面
+        self.assertEqual(response.data['results'][0]['id'], self.article3.id)
+        self.assertEqual(response.data['results'][1]['id'], self.article1.id)
+
+    def test_search_empty_query(self):
+        """测试空搜索关键词"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': '', 'type': 'all'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    def test_search_invalid_type(self):
+        """测试无效的搜索类型"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'Django', 'type': 'invalid'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    def test_search_only_published_articles(self):
+        """测试只搜索已发布的文章"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': '草稿', 'type': 'all'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 0)  # 草稿文章不应该出现
+
+    def test_search_case_insensitive(self):
+        """测试搜索不区分大小写"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'django', 'type': 'title'})  # 小写
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['id'], self.article1.id)
+
+    def test_search_response_format(self):
+        """测试搜索响应格式"""
+        url = reverse('article-search')
+        response = self.client.get(url, {'q': 'Django', 'type': 'all'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 检查响应格式
+        self.assertIn('results', response.data)
+        self.assertIn('count', response.data)
+        self.assertIn('search_info', response.data)
+
+        # 检查搜索信息
+        search_info = response.data['search_info']
+        self.assertEqual(search_info['query'], 'Django')
+        self.assertEqual(search_info['search_type'], 'all')
+        self.assertEqual(search_info['total_results'], 1)
+
+
+class ArticleSearchSerializerTest(TestCase):
+    """文章搜索序列化器测试"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpass123'
+        )
+        self.article = Article.objects.create(
+            title='测试文章标题',
+            content='这是一篇很长的测试文章内容，用于测试搜索序列化器的内容摘要功能。' * 10,  # 创建长内容
+            author=self.user,
+            status=Article.Status.PUBLISHED,
+            view_count=150
+        )
+
+    def test_search_serializer_fields(self):
+        """测试搜索序列化器字段"""
+        serializer = ArticleSearchSerializer(self.article)
+        data = serializer.data
+
+        # 检查必需字段
+        required_fields = ['id', 'title', 'content_summary', 'author', 'created_at', 'status', 'view_count']
+        for field in required_fields:
+            self.assertIn(field, data)
+
+    def test_content_summary_truncation(self):
+        """测试内容摘要截断"""
+        serializer = ArticleSearchSerializer(self.article)
+        data = serializer.data
+
+        # 内容摘要应该被截断到200字符并添加省略号
+        self.assertLessEqual(len(data['content_summary']), 203)  # 200 + "..."
+        self.assertTrue(data['content_summary'].endswith('...'))
+
+    def test_content_summary_no_truncation(self):
+        """测试短内容不被截断"""
+        short_article = Article.objects.create(
+            title='短文章',
+            content='这是一篇短文章',
+            author=self.user,
+            status=Article.Status.PUBLISHED
+        )
+
+        serializer = ArticleSearchSerializer(short_article)
+        data = serializer.data
+
+        # 短内容不应该被截断
+        self.assertEqual(data['content_summary'], '这是一篇短文章')
+        self.assertFalse(data['content_summary'].endswith('...'))
+
+    def test_author_serialization(self):
+        """测试作者信息序列化"""
+        serializer = ArticleSearchSerializer(self.article)
+        data = serializer.data
+
+        # 检查作者信息
+        self.assertIn('author', data)
+        author_data = data['author']
+        self.assertEqual(author_data['username'], 'testuser')
+        self.assertEqual(author_data['email'], 'test@example.com')
+
+    def test_readonly_fields(self):
+        """测试只读字段"""
+        serializer = ArticleSearchSerializer(self.article)
+
+        # 检查只读字段
+        readonly_fields = ['id', 'created_at', 'author', 'view_count']
+        for field in readonly_fields:
+            self.assertIn(field, serializer.Meta.read_only_fields)

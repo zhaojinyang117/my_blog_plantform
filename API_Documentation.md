@@ -5,6 +5,7 @@
 1. [认证机制](#认证机制)
 2. [用户管理 API](#用户管理-api)
 3. [文章管理 API](#文章管理-api)
+   - [2.6 搜索文章](#26-搜索文章)
 4. [评论系统 API](#评论系统-api)
 5. [权限矩阵](#权限矩阵)
 6. [错误处理](#错误处理)
@@ -221,6 +222,7 @@ GET /api/users/verify-email/?token=abc123def456ghi789
 ```
 
 > **注意**: 用户登录成功时，系统会自动记录以下信息（但不会在响应中返回）：
+>
 > - 用户最后登录的IP地址 (`last_login_ip`)
 > - 用户的总登录次数 (`login_count`)
 >
@@ -509,6 +511,7 @@ curl -X GET http://localhost:8000/api/articles/ \
 ```
 
 > **访问统计说明**:
+>
 > - 每次访问已发布文章的详情页时，`view_count` 会自动增加 1
 > - 访问草稿文章不会增加访问计数
 > - 使用 Django F 表达式确保并发安全
@@ -674,6 +677,163 @@ const createArticle = async (articleData, token) => {
 - 所有相关评论
 - 所有相关的 Guardian 对象权限
 
+### 2.6 搜索文章
+
+搜索文章，支持按标题、内容、作者搜索，以及多种排序方式。
+
+**端点**: `GET /api/articles/search/`
+**权限**: 无需认证（仅搜索已发布文章）
+
+#### 查询参数
+
+| 参数     | 类型   | 必需 | 默认值      | 说明                                                    |
+| -------- | ------ | ---- | ----------- | ------------------------------------------------------- |
+| q        | string | ✓    | -           | 搜索关键词                                              |
+| type     | string | ×    | all         | 搜索类型：all, title, content, author                  |
+| ordering | string | ×    | -created_at | 排序方式：-created_at, created_at, -view_count, title  |
+| page     | int    | ×    | 1           | 页码                                                    |
+
+#### 搜索类型说明
+
+- **all**: 在标题、内容、作者中搜索
+- **title**: 仅在文章标题中搜索
+- **content**: 仅在文章内容中搜索
+- **author**: 仅在作者用户名中搜索
+
+#### 排序方式说明
+
+- **-created_at**: 按创建时间倒序（最新优先）
+- **created_at**: 按创建时间正序（最早优先）
+- **-view_count**: 按访问量倒序（最热门优先）
+- **view_count**: 按访问量正序（最冷门优先）
+- **title**: 按标题字母顺序
+- **-title**: 按标题字母倒序
+
+#### 请求示例
+
+```bash
+# 基本搜索
+curl -X GET "http://localhost:8000/api/articles/search/?q=Django"
+
+# 按标题搜索
+curl -X GET "http://localhost:8000/api/articles/search/?q=Django&type=title"
+
+# 按热门度排序
+curl -X GET "http://localhost:8000/api/articles/search/?q=Python&ordering=-view_count"
+
+# 分页搜索
+curl -X GET "http://localhost:8000/api/articles/search/?q=React&page=2"
+```
+
+#### 成功响应 (200 OK)
+
+```json
+{
+  "count": 15,
+  "next": "http://localhost:8000/api/articles/search/?q=Django&page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Django Web开发完整指南",
+      "content": "这是一篇详细介绍Django框架的文章...",
+      "author": {
+        "id": 1,
+        "username": "developer",
+        "email": "dev@example.com",
+        "avatar": "http://localhost:8000/media/avatars/1/avatar.jpg"
+      },
+      "created_at": "2025-06-19T14:30:00Z",
+      "status": "published",
+      "view_count": 256
+    }
+  ],
+  "search_info": {
+    "query": "Django",
+    "search_type": "all",
+    "ordering": "-created_at",
+    "total_results": 15
+  }
+}
+```
+
+#### 错误响应
+
+**空搜索关键词 (400 Bad Request)**:
+
+```json
+{
+  "error": "搜索关键词不能为空"
+}
+```
+
+**无效搜索类型 (400 Bad Request)**:
+
+```json
+{
+  "error": "无效的搜索类型，支持的类型：all, title, content, author"
+}
+```
+
+**无效排序方式 (400 Bad Request)**:
+
+```json
+{
+  "error": "无效的排序方式，支持的排序：-created_at, created_at, -view_count, view_count, title, -title"
+}
+```
+
+#### JavaScript 示例
+
+```javascript
+const searchArticles = async (searchParams) => {
+  try {
+    const params = new URLSearchParams({
+      q: searchParams.query,
+      type: searchParams.type || 'all',
+      ordering: searchParams.ordering || '-created_at',
+      page: searchParams.page || 1
+    });
+
+    const response = await fetch(`http://localhost:8000/api/articles/search/?${params}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || '搜索失败');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('搜索失败:', error);
+    throw error;
+  }
+};
+
+// 使用示例
+searchArticles({
+  query: 'Django',
+  type: 'all',
+  ordering: '-view_count',
+  page: 1
+}).then(results => {
+  console.log('搜索结果:', results);
+});
+```
+
+#### 搜索功能特性
+
+- **权限控制**: 只搜索已发布的文章，草稿文章不会出现在搜索结果中
+- **模糊匹配**: 支持中文和英文的模糊搜索
+- **不区分大小写**: 搜索时忽略大小写
+- **结果缓存**: 搜索结果会被缓存5分钟，提高响应速度
+- **分页支持**: 支持分页浏览搜索结果
+- **多种排序**: 支持按时间、热度、标题等多种方式排序
+
 ---
 
 ## 评论系统 API
@@ -751,6 +911,7 @@ const createArticle = async (articleData, token) => {
 ```
 
 > **评论审核说明**:
+>
 > - 评论包含 `status` 字段表示审核状态：`pending`（待审核）、`approved`（已通过）、`rejected`（已拒绝）
 > - 评论包含 `status_display` 字段显示状态的中文名称
 > - 未登录用户只能看到已通过的评论
@@ -1565,6 +1726,7 @@ def create_article(request):
 | login_count | PositiveIntegerField | 总登录次数 | ❌ 不在API响应中 |
 
 > **注意**: 这些统计数据目前仅用于后台管理和安全审计，不会在用户API响应中返回。`UserSerializer` 中未包含这些字段，如需在前端展示，需要：
+>
 > 1. 在 `UserSerializer` 的 `fields` 列表中添加 `'last_login_ip'` 和 `'login_count'`
 > 2. 或创建专门的用户统计API端点（推荐用于敏感数据）
 
@@ -1654,6 +1816,7 @@ def retrieve(self, request, *args, **kwargs):
 #### 前端展示建议
 
 1. **文章列表页**
+
    ```javascript
    // 显示访问量
    <span className="view-count">
@@ -1662,6 +1825,7 @@ def retrieve(self, request, *args, **kwargs):
    ```
 
 2. **热门文章组件**
+
    ```javascript
    // 获取热门文章
    const hotArticles = articles
@@ -1671,6 +1835,7 @@ def retrieve(self, request, *args, **kwargs):
    ```
 
 3. **文章详情页**
+
    ```javascript
    // 实时显示访问量
    <div className="article-stats">

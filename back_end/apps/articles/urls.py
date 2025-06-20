@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import SimpleRouter
 from rest_framework_nested.routers import NestedSimpleRouter
-from .views import ArticleViewSet
+from .views import ArticleViewSet, ArticleSearchView
 from apps.comments.views import CommentViewSet
 
 # 主路由，用于文章 CRUD 操作
@@ -23,6 +23,8 @@ articles_router = NestedSimpleRouter(
 articles_router.register(r"comments", CommentViewSet, basename="article-comments")
 
 urlpatterns = [
+    # 搜索路由: /api/articles/search/
+    path("search/", ArticleSearchView.as_view(), name="article-search"),
     # 文章相关路由: /api/articles/
     path("", include(router.urls)),
     # 评论相关路由: /api/articles/{article_pk}/comments/

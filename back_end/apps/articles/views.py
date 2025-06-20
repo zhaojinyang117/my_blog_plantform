@@ -1,10 +1,11 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, generics, filters
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import Article
-from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer
+from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer, ArticleSearchSerializer
 from .permissions import IsAuthorOrReadOnly
 from utils.permissions import CanEditArticle, IsStaffOrOwnerOrReadOnly
+from utils.search import SearchQueryBuilder, SearchCache, validate_search_params
 from django.db.models import Q
 from guardian.shortcuts import assign_perm, get_perms, remove_perm
 from guardian.decorators import permission_required_or_403
@@ -241,3 +242,99 @@ class ArticleViewSet(viewsets.ModelViewSet):
         cache.set(cache_key, serializer.data, timeout=cache_timeout)
         
         return Response(serializer.data)
+
+
+class ArticleSearchView(generics.ListAPIView):
+    """
+    文章搜索视图
+    支持按标题、内容、作者搜索
+    """
+    serializer_class = ArticleSearchSerializer
+    permission_classes = [permissions.AllowAny]  # 搜索功能对所有用户开放
+
+    def get_queryset(self):
+        """
+        根据搜索参数过滤文章
+        """
+        queryset = Article.objects.filter(
+            status=Article.Status.PUBLISHED
+        ).select_related('author')  # 只搜索已发布的文章
+
+        # 获取搜索参数
+        query = self.request.query_params.get('q', '').strip()
+        search_type = self.request.query_params.get('type', 'all')
+        ordering = self.request.query_params.get('ordering', '-created_at')
+
+        # 验证搜索参数
+        is_valid, error_msg = validate_search_params(query, search_type, ordering)
+        if not is_valid:
+            return queryset.none()
+
+        # 使用搜索查询构建器
+        search_builder = SearchQueryBuilder(Article)
+
+        # 根据搜索类型添加搜索条件
+        if search_type == 'all':
+            search_fields = ['title', 'content', 'author__username']
+        elif search_type == 'title':
+            search_fields = ['title']
+        elif search_type == 'content':
+            search_fields = ['content']
+        elif search_type == 'author':
+            search_fields = ['author__username']
+        else:
+            search_fields = ['title', 'content', 'author__username']
+
+        search_builder.add_text_search(query, search_fields)
+        search_conditions = search_builder.build()
+
+        queryset = queryset.filter(search_conditions)
+
+        # 应用排序
+        queryset = queryset.order_by(ordering)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """
+        重写list方法，添加搜索结果缓存和统计信息
+        """
+        # 获取搜索参数
+        query = request.query_params.get('q', '').strip()
+        search_type = request.query_params.get('type', 'all')
+        ordering = request.query_params.get('ordering', '-created_at')
+        page = request.query_params.get('page', '1')
+
+        # 验证搜索参数
+        is_valid, error_msg = validate_search_params(query, search_type, ordering)
+        if not is_valid:
+            return Response({
+                'error': error_msg,
+                'results': [],
+                'count': 0
+            }, status=400)
+
+        # 生成缓存键
+        cache_key = SearchCache.get_cache_key(query, search_type, ordering, page)
+
+        # 尝试从缓存获取搜索结果
+        cached_response = SearchCache.get_cached_result(cache_key)
+        if cached_response is not None:
+            return Response(cached_response)
+
+        # 执行搜索
+        response = super().list(request, *args, **kwargs)
+
+        # 添加搜索统计信息
+        if hasattr(response, 'data') and isinstance(response.data, dict):
+            response.data['search_info'] = {
+                'query': query,
+                'search_type': search_type,
+                'ordering': ordering,
+                'total_results': response.data.get('count', 0)
+            }
+
+        # 将搜索结果存入缓存
+        SearchCache.cache_result(cache_key, response.data)
+
+        return response

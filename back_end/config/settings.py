@@ -59,6 +59,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "utils.middleware.AdminOnlyMiddleware",  # 管理后台权限控制中间件
+    "utils.middleware.UserActivityMiddleware",  # 阶段9：用户活动统计中间件
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

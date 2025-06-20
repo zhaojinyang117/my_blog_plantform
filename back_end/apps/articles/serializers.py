@@ -28,8 +28,9 @@ class ArticleSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "status",
+            "view_count",  # 阶段9：添加访问统计字段
         ]
-        read_only_fields = ["id", "created_at", "author"]
+        read_only_fields = ["id", "created_at", "author", "view_count"]
 
 
 class ArticleCreateUpdateSerializer(serializers.ModelSerializer):

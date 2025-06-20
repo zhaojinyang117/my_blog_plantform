@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.response import Response
 from .models import Article
 from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer
 from .permissions import IsAuthorOrReadOnly
@@ -14,6 +15,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     文章视图集
     提供 `list`、`create`、`retrieve`、`update` 和 `destroy` 操作
     集成Guardian对象级权限控制
+    阶段9：新增文章访问统计功能
     """
 
     #########################################
@@ -68,6 +70,26 @@ class ArticleViewSet(viewsets.ModelViewSet):
         assign_perm('articles.manage_article', self.request.user, article)
 
         return article
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        阶段9：重写retrieve方法以实现文章访问统计
+        每次获取文章详情时，增加访问计数
+        """
+        instance = self.get_object()
+        
+        # 只有当文章是已发布状态时才增加访问计数
+        if instance.status == Article.Status.PUBLISHED:
+            # 使用F表达式来避免竞态条件
+            from django.db.models import F
+            Article.objects.filter(pk=instance.pk).update(
+                view_count=F('view_count') + 1
+            )
+            # 重新获取更新后的实例，确保返回最新的view_count
+            instance.refresh_from_db()
+        
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         """

@@ -53,6 +53,43 @@ class UserModelTests(TestCase):
         self.assertEqual(User.USERNAME_FIELD, "email")
         self.assertEqual(User.REQUIRED_FIELDS, ["username"])
 
+    def test_user_activity_fields_default_values(self):
+        """阶段9：测试用户活动统计字段的默认值"""
+        user = User.objects.create_user(**self.user_data)
+        
+        # 检查统计字段的默认值
+        self.assertEqual(user.login_count, 0)
+        self.assertIsNone(user.last_login_ip)
+
+    def test_user_activity_fields_update(self):
+        """阶段9：测试用户活动字段更新"""
+        user = User.objects.create_user(**self.user_data)
+        
+        # 更新活动信息
+        test_ip = '192.168.1.1'
+        user.last_login_ip = test_ip
+        user.login_count = 5
+        user.save()
+        
+        # 重新获取用户检查更新
+        user.refresh_from_db()
+        self.assertEqual(user.last_login_ip, test_ip)
+        self.assertEqual(user.login_count, 5)
+
+    def test_user_activity_fields_increment(self):
+        """阶段9：测试用户活动字段递增"""
+        user = User.objects.create_user(**self.user_data)
+        
+        # 模拟多次登录
+        for i in range(1, 4):
+            user.login_count += 1
+            user.last_login_ip = f'192.168.1.{i}'
+            user.save()
+            
+            user.refresh_from_db()
+            self.assertEqual(user.login_count, i)
+            self.assertEqual(user.last_login_ip, f'192.168.1.{i}')
+
 
 class EmailVerificationTests(TestCase):
     """邮箱验证功能测试类"""
@@ -1065,3 +1102,243 @@ class PerformanceTests(APITestCase):
         # 验证性能和唯一性
         self.assertLess(execution_time, 5.0, "Token generation should be fast")
         self.assertEqual(len(tokens), len(set(tokens)), "All tokens should be unique")
+
+
+class UserActivityMiddlewareTest(APITestCase):
+    """
+    阶段9：用户活动中间件测试类
+    测试用户活动统计功能，包括登录IP记录和登录次数统计
+    """
+
+    def setUp(self):
+        """测试前的准备工作"""
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="testuser",
+            email="test@example.com",
+            password="testpassword123",
+            is_active=True,
+        )
+        self.login_url = reverse("token_obtain_pair")
+
+    def test_middleware_records_login_ip_and_count_on_login(self):
+        """测试中间件在登录时记录IP和计数"""
+        # 验证初始状态
+        self.assertEqual(self.user.login_count, 0)
+        self.assertIsNone(self.user.last_login_ip)
+
+        # 模拟登录请求
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 设置IP地址
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR="192.168.1.100"
+        )
+
+        # 验证登录成功
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 刷新用户数据并验证活动记录
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 1)
+        self.assertEqual(self.user.last_login_ip, "192.168.1.100")
+
+    def test_middleware_increments_login_count_on_multiple_logins(self):
+        """测试中间件在多次登录时正确递增计数"""
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 进行多次登录
+        for i in range(1, 4):
+            # 使用不同的IP地址
+            response = self.client.post(
+                self.login_url,
+                login_data,
+                format="json",
+                HTTP_X_FORWARDED_FOR=f"192.168.1.{100 + i}"
+            )
+            
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            
+            # 验证计数和IP更新
+            self.user.refresh_from_db()
+            self.assertEqual(self.user.login_count, i)
+            self.assertEqual(self.user.last_login_ip, f"192.168.1.{100 + i}")
+
+    def test_middleware_uses_remote_addr_fallback(self):
+        """测试中间件在没有X-Forwarded-For时使用REMOTE_ADDR"""
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 不设置X-Forwarded-For，只设置REMOTE_ADDR
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            REMOTE_ADDR="10.0.0.50"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 1)
+        self.assertEqual(self.user.last_login_ip, "10.0.0.50")
+
+    def test_middleware_handles_x_forwarded_for_multiple_ips(self):
+        """测试中间件正确处理X-Forwarded-For中的多个IP"""
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 设置包含多个IP的X-Forwarded-For头
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR="203.0.113.1, 198.51.100.1, 192.168.1.1"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 1)
+        # 应该使用第一个IP（真实客户端IP）
+        self.assertEqual(self.user.last_login_ip, "203.0.113.1")
+
+    def test_middleware_only_updates_on_login_api(self):
+        """测试中间件只在登录API调用时更新活动数据"""
+        # 先登录获取token
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        login_response = self.client.post(self.login_url, login_data, format="json")
+        token = login_response.json()["access"]
+        
+        # 记录初始状态
+        self.user.refresh_from_db()
+        initial_count = self.user.login_count
+        initial_ip = self.user.last_login_ip
+
+        # 进行非登录API调用（获取用户详情）
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        profile_url = reverse("user-detail")
+        response = self.client.get(
+            profile_url,
+            HTTP_X_FORWARDED_FOR="192.168.1.200"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 验证活动数据没有被更新
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, initial_count)
+        self.assertEqual(self.user.last_login_ip, initial_ip)
+
+    def test_middleware_handles_invalid_ip_addresses(self):
+        """测试中间件处理无效IP地址"""
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 使用无效的IP地址
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR="invalid.ip.address"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 1)
+        # 对于无效IP，应该存储None或不更新last_login_ip
+        # 具体行为取决于中间件的实现
+        # 这里我们验证不会导致错误
+
+    def test_middleware_handles_anonymous_users(self):
+        """测试中间件正确处理匿名用户请求"""
+        # 匿名用户访问不需要认证的端点
+        register_url = reverse("user-register")
+        register_data = {
+            "username": "newuser",
+            "email": "newuser@example.com",
+            "password": "newpassword123",
+            "password2": "newpassword123",
+        }
+        
+        response = self.client.post(
+            register_url,
+            register_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR="192.168.1.300"
+        )
+
+        # 注册应该成功，中间件不应该出错
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_middleware_performance_with_frequent_requests(self):
+        """测试中间件在频繁请求下的性能"""
+        import time
+        
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        start_time = time.time()
+        
+        # 进行多次登录请求
+        for i in range(10):  # 限制次数以避免测试时间过长
+            response = self.client.post(
+                self.login_url,
+                login_data,
+                format="json",
+                HTTP_X_FORWARDED_FOR=f"192.168.1.{i + 1}"
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
+        # 验证性能合理
+        self.assertLess(execution_time, 10.0, "中间件处理应该在合理时间内完成")
+        
+        # 验证最终状态
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 10)
+        self.assertEqual(self.user.last_login_ip, "192.168.1.10")
+
+    def test_middleware_with_ipv6_addresses(self):
+        """测试中间件处理IPv6地址"""
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        # 使用IPv6地址
+        ipv6_address = "2001:db8:85a3::8a2e:370:7334"
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR=ipv6_address
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.login_count, 1)
+        self.assertEqual(self.user.last_login_ip, ipv6_address)
+
+    def test_middleware_preserves_existing_login_count(self):
+        """测试中间件保持现有的登录计数不被重置"""
+        # 手动设置初始计数
+        self.user.login_count = 5
+        self.user.last_login_ip = "192.168.1.99"
+        self.user.save()
+
+        login_data = {"email": "test@example.com", "password": "testpassword123"}
+        
+        response = self.client.post(
+            self.login_url,
+            login_data,
+            format="json",
+            HTTP_X_FORWARDED_FOR="192.168.1.101"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        # 计数应该在原有基础上递增
+        self.assertEqual(self.user.login_count, 6)
+        self.assertEqual(self.user.last_login_ip, "192.168.1.101")

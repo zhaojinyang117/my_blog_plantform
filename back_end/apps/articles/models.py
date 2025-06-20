@@ -28,6 +28,13 @@ class Article(models.Model):
     status = models.CharField(
         _("状态"), max_length=10, choices=Status.choices, default=Status.DRAFT
     )
+    
+    # 阶段9：文章访问统计字段
+    view_count = models.PositiveIntegerField(
+        _("访问次数"),
+        default=0,
+        help_text=_("文章被访问的次数")
+    )
 
     class Meta:
         verbose_name = _("文章")

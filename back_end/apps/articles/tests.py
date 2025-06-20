@@ -450,6 +450,227 @@ class ArticlePermissionTest(TestCase):
         self.assertFalse(permission.has_object_permission(request, None, self.article))
 
 
+class ArticleViewCountTest(APITestCase):
+    """文章访问统计测试"""
+
+    def setUp(self):
+        """设置测试数据"""
+        self.user = User.objects.create_user(
+            username="testuser", email="test@example.com", password="testpass123", is_active=True
+        )
+        self.other_user = User.objects.create_user(
+            username="otheruser", email="other@example.com", password="testpass123", is_active=True
+        )
+
+        # 创建测试文章
+        self.article = Article.objects.create(
+            title="访问统计测试文章",
+            content="这是用于测试访问统计的文章内容",
+            author=self.user,
+            status=Article.Status.PUBLISHED,
+        )
+
+    def get_jwt_token(self, user):
+        """获取JWT令牌"""
+        refresh = RefreshToken.for_user(user)
+        return str(refresh.access_token)
+
+    def test_article_default_view_count(self):
+        """测试文章默认访问次数为0"""
+        self.assertEqual(self.article.view_count, 0)
+
+    def test_article_view_count_increment_anonymous(self):
+        """测试匿名用户访问文章时访问次数递增"""
+        url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        
+        # 第一次访问
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 刷新文章数据并检查访问次数
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 1)
+        
+        # 第二次访问
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 再次检查访问次数
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 2)
+
+    def test_article_view_count_increment_authenticated(self):
+        """测试认证用户访问文章时访问次数递增"""
+        token = self.get_jwt_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        
+        # 访问文章
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查访问次数
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 1)
+
+    def test_article_view_count_multiple_users(self):
+        """测试多个用户访问同一文章时计数共享"""
+        url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        
+        # 用户1访问
+        token1 = self.get_jwt_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token1}")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 用户2访问
+        token2 = self.get_jwt_token(self.other_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token2}")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 匿名用户访问
+        self.client.credentials()  # 清除认证
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查总访问次数
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 3)
+
+    def test_article_view_count_in_serializer(self):
+        """测试序列化器正确返回访问次数"""
+        # 先访问几次文章以增加计数
+        url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        for _ in range(5):
+            self.client.get(url)
+        
+        # 获取文章详情
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查响应中包含访问次数
+        self.assertIn("view_count", response.data)
+        self.assertEqual(response.data["view_count"], 6)  # 5次循环 + 1次获取详情
+
+    def test_article_view_count_in_list(self):
+        """测试文章列表中包含访问次数"""
+        # 先访问文章以增加计数
+        detail_url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        self.client.get(detail_url)
+        
+        # 获取文章列表
+        list_url = reverse("article-list")
+        response = self.client.get(list_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查列表中的文章包含访问次数
+        articles = response.data["results"]
+        test_article = next((a for a in articles if a["id"] == self.article.id), None)
+        self.assertIsNotNone(test_article)
+        self.assertIn("view_count", test_article)
+        self.assertEqual(test_article["view_count"], 1)
+
+    def test_article_view_count_not_increment_on_create(self):
+        """测试创建文章时访问次数不受影响"""
+        token = self.get_jwt_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        url = reverse("article-list")
+        data = {
+            "title": "新文章",
+            "content": "新文章内容",
+            "status": "published"
+        }
+        
+        response = self.client.post(url, data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # 检查新创建的文章访问次数为0
+        new_article = Article.objects.get(title="新文章")
+        self.assertEqual(new_article.view_count, 0)
+
+    def test_article_view_count_not_increment_on_update(self):
+        """测试更新文章时访问次数不受影响"""
+        # 先访问文章以增加计数
+        detail_url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        self.client.get(detail_url)
+        
+        self.article.refresh_from_db()
+        original_count = self.article.view_count
+        self.assertEqual(original_count, 1)
+        
+        # 更新文章
+        token = self.get_jwt_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        update_data = {
+            "title": "更新后的标题",
+            "content": "更新后的内容",
+            "status": "published"
+        }
+        
+        response = self.client.put(detail_url, update_data, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查访问次数未改变
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, original_count)
+
+    def test_article_view_count_draft_access(self):
+        """测试访问草稿文章时计数行为"""
+        # 创建草稿文章
+        draft_article = Article.objects.create(
+            title="草稿文章",
+            content="草稿内容",
+            author=self.user,
+            status=Article.Status.DRAFT,
+        )
+        
+        # 作者访问草稿文章
+        token = self.get_jwt_token(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        
+        url = reverse("article-detail", kwargs={"pk": draft_article.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查草稿文章的访问次数不会递增（只有已发布文章才统计访问量）
+        draft_article.refresh_from_db()
+        self.assertEqual(draft_article.view_count, 0)
+
+    def test_article_view_count_concurrent_access(self):
+        """测试并发访问时计数的准确性（适配SQLite限制）"""
+        url = reverse("article-detail", kwargs={"pk": self.article.pk})
+        
+        # 由于SQLite的并发限制，我们使用顺序访问来测试计数功能
+        # 在生产环境中使用PostgreSQL/MySQL时会有更好的并发支持
+        for i in range(5):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # 检查访问次数正确
+        self.article.refresh_from_db()
+        self.assertEqual(self.article.view_count, 5)
+
+    def test_article_view_count_field_readonly(self):
+        """测试访问次数字段在序列化器中为只读"""
+        from .serializers import ArticleSerializer
+        
+        # 尝试通过序列化器直接设置访问次数
+        data = {
+            "title": "测试文章",
+            "content": "测试内容",
+            "status": "published",
+            "view_count": 100  # 尝试直接设置访问次数
+        }
+        
+        serializer = ArticleSerializer(data=data)
+        if serializer.is_valid():
+            # 如果序列化器验证通过，检查访问次数是否被忽略
+            validated_data = serializer.validated_data
+            self.assertNotIn("view_count", validated_data)
 class ArticleEdgeCaseTest(TestCase):
     """文章边界情况测试"""
 

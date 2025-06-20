@@ -10,7 +10,8 @@
 6. [错误处理](#错误处理)
 7. [数据模型](#数据模型)
 8. [性能指标](#性能指标)
-9. [完整示例](#完整示例)
+9. [数据统计功能](#数据统计功能)
+10. [完整示例](#完整示例)
 
 ---
 
@@ -28,8 +29,8 @@ Authorization: Bearer <access_token>
 
 #### 令牌生命周期
 
-- **Access Token**: 60 分钟
-- **Refresh Token**: 7 天
+- **Access Token**: 30 分钟
+- **Refresh Token**: 1 天
 
 #### 认证状态说明
 
@@ -214,10 +215,16 @@ GET /api/users/verify-email/?token=abc123def456ghi789
 
 ```json
 {
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjMxNTUwMzYwLCJqdGkiOiI4YzQ5ZGE5ZjU4NjQ0YWU4YjZkZjU5ZjcyZTJjMzA2NCIsInVzZXJfaWQiOjF9.Qo_fVJJq-LKKhwBVRz3QExgdxOdg5RCJt-qTqH8WVQA",
+  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjMxNTUwMzYwLCJqdGkiOiI4YzQ5ZGE5ZjU4NjQ0YWU4YjZkZjU5ZjcyTlJjMzA2NCIsInVzZXJfaWQiOjF9.Qo_fVJJq-LKKhwBVRz3QExgdxOdg5RCJt-qTqH8WVQA",
   "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTYzMjE1NTE2MCwianRpIjoiNGY2ZWRmYWE2N2Y2NDkwNWE4ZGZkNzU5MjE2ZDZhNzYiLCJ1c2VyX2lkIjoxfQ.wQJI0KjNBYg8K6JQ_s-FBZ7ZyTW5x1q6wY6qVnGnUPQ"
 }
 ```
+
+> **注意**: 用户登录成功时，系统会自动记录以下信息（但不会在响应中返回）：
+> - 用户最后登录的IP地址 (`last_login_ip`)
+> - 用户的总登录次数 (`login_count`)
+>
+> 这些统计数据用于后台分析和安全审计。
 
 #### 错误响应
 
@@ -419,7 +426,7 @@ const uploadAvatar = async (file, token) => {
 | 参数      | 类型    | 必需 | 默认值 | 说明     |
 | --------- | ------- | ---- | ------ | -------- |
 | page      | integer | ×    | 1      | 页码     |
-| page_size | integer | ×    | 20     | 每页数量 |
+| page_size | integer | ×    | 10     | 每页数量 |
 
 #### 权限逻辑
 
@@ -447,7 +454,8 @@ const uploadAvatar = async (file, token) => {
       },
       "created_at": "2025-06-19T14:30:00Z",
       "updated_at": "2025-06-19T14:30:00Z",
-      "status": "published"
+      "status": "published",
+      "view_count": 156
     }
   ]
 }
@@ -495,9 +503,15 @@ curl -X GET http://localhost:8000/api/articles/ \
   },
   "created_at": "2025-06-19T14:30:00Z",
   "updated_at": "2025-06-19T14:30:00Z",
-  "status": "published"
+  "status": "published",
+  "view_count": 157
 }
 ```
+
+> **访问统计说明**:
+> - 每次访问已发布文章的详情页时，`view_count` 会自动增加 1
+> - 访问草稿文章不会增加访问计数
+> - 使用 Django F 表达式确保并发安全
 
 #### 错误响应
 
@@ -557,7 +571,8 @@ curl -X GET http://localhost:8000/api/articles/ \
     "avatar": "http://localhost:8000/media/avatars/1/user_1_avatar.jpg"
   },
   "created_at": "2025-06-19T15:00:00Z",
-  "updated_at": "2025-06-19T15:00:00Z"
+  "updated_at": "2025-06-19T15:00:00Z",
+  "view_count": 0
 }
 ```
 
@@ -636,7 +651,8 @@ const createArticle = async (articleData, token) => {
     "avatar": "http://localhost:8000/media/avatars/1/user_1_avatar.jpg"
   },
   "created_at": "2025-06-19T14:30:00Z",
-  "updated_at": "2025-06-19T15:30:00Z"
+  "updated_at": "2025-06-19T15:30:00Z",
+  "view_count": 42
 }
 ```
 
@@ -696,6 +712,8 @@ const createArticle = async (articleData, token) => {
     "article": 1,
     "content": "这是一条很有深度的评论！",
     "created_at": "2025-06-19T16:00:00Z",
+    "status": "approved",
+    "status_display": "已通过",
     "parent": null,
     "replies": [
       {
@@ -724,11 +742,21 @@ const createArticle = async (articleData, token) => {
     "article": 1,
     "content": "文章写得很好！",
     "created_at": "2025-06-19T16:30:00Z",
+    "status": "approved",
+    "status_display": "已通过",
     "parent": null,
     "replies": []
   }
 ]
 ```
+
+> **评论审核说明**:
+> - 评论包含 `status` 字段表示审核状态：`pending`（待审核）、`approved`（已通过）、`rejected`（已拒绝）
+> - 评论包含 `status_display` 字段显示状态的中文名称
+> - 未登录用户只能看到已通过的评论
+> - 登录用户可以看到已通过的评论和自己的所有评论
+> - 管理员可以看到所有评论
+> - 评论内容会自动进行敏感词过滤，包含敏感词的评论会进入待审核状态
 
 ### 3.2 创建评论
 
@@ -747,7 +775,7 @@ const createArticle = async (articleData, token) => {
 
 | 参数    | 类型    | 必需 | 说明                   |
 | ------- | ------- | ---- | ---------------------- |
-| content | string  | ✓    | 评论内容               |
+| content | string  | ✓    | 评论内容（会自动进行敏感词过滤） |
 | parent  | integer | ×    | 父评论 ID (回复时使用) |
 
 #### 创建顶级评论示例
@@ -781,7 +809,10 @@ const createArticle = async (articleData, token) => {
   "article": 1,
   "content": "这是一条新评论！",
   "created_at": "2025-06-19T17:00:00Z",
-  "parent": null
+  "status": "approved",
+  "status_display": "已通过",
+  "parent": null,
+  "replies": []
 }
 ```
 
@@ -870,7 +901,10 @@ await createComment(1, { content: "我也这么认为", parent: 1 }, token);
   "article": 1,
   "content": "这是一条很有深度的评论！",
   "created_at": "2025-06-19T16:00:00Z",
-  "parent": null
+  "status": "approved",
+  "status_display": "已通过",
+  "parent": null,
+  "replies": []
 }
 ```
 
@@ -1183,7 +1217,9 @@ const handleFormErrors = (errors) => {
   "is_superuser": "boolean (超级用户状态)",
   "email_verification_token": "string (邮箱验证令牌，内部字段)",
   "date_joined": "datetime (注册时间)",
-  "last_login": "datetime (最后登录时间)"
+  "last_login": "datetime (最后登录时间)",
+  "last_login_ip": "string (最后登录IP地址，内部字段)",
+  "login_count": "integer (总登录次数，内部字段)"
 }
 ```
 
@@ -1197,6 +1233,8 @@ const handleFormErrors = (errors) => {
 - **is_active**: 账户激活状态，新用户注册时为 `false`
 - **email_verification_token**: 邮箱验证用的 UUID 令牌
 - **date_joined**: 用户首次注册时间
+- **last_login_ip**: 用户最后一次登录的IP地址（通过中间件自动记录）
+- **login_count**: 用户的总登录次数（每次成功登录自动增加）
 
 #### 头像存储路径
 
@@ -1218,7 +1256,8 @@ media/avatars/{user_id}/user_{user_id}_avatar_{random_hash}.{ext}
   "author": "ForeignKey (关联User，级联删除)",
   "status": "string (状态：draft/published)",
   "created_at": "datetime (创建时间，自动)",
-  "updated_at": "datetime (更新时间，自动)"
+  "updated_at": "datetime (更新时间，自动)",
+  "view_count": "integer (访问次数，默认0)"
 }
 ```
 
@@ -1235,7 +1274,8 @@ media/avatars/{user_id}/user_{user_id}_avatar_{random_hash}.{ext}
 - **content**: NOT NULL, TEXT
 - **author_id**: NOT NULL, 外键约束
 - **status**: NOT NULL, DEFAULT 'draft'
-- **索引**: created_at(降序), author_id, status
+- **view_count**: NOT NULL, DEFAULT 0
+- **索引**: created_at(降序), author_id, status, view_count
 
 ### 评论模型 (Comment)
 
@@ -1248,7 +1288,8 @@ media/avatars/{user_id}/user_{user_id}_avatar_{random_hash}.{ext}
   "user": "ForeignKey (关联User，级联删除)",
   "content": "text (评论内容)",
   "parent": "ForeignKey (父评论，自关联，可选)",
-  "created_at": "datetime (创建时间，自动)"
+  "created_at": "datetime (创建时间，自动)",
+  "status": "string (审核状态：pending/approved/rejected，默认pending)"
 }
 ```
 
@@ -1264,7 +1305,8 @@ media/avatars/{user_id}/user_{user_id}_avatar_{random_hash}.{ext}
 - **article_id**: NOT NULL, 外键约束
 - **user_id**: NOT NULL, 外键约束
 - **parent_id**: 可选, 外键约束 (自关联)
-- **索引**: article_id, parent_id, created_at
+- **status**: NOT NULL, DEFAULT 'pending'
+- **索引**: article_id, parent_id, created_at, status
 
 ### 权限模型 (Guardian 扩展)
 
@@ -1318,7 +1360,7 @@ User (用户)
 | ------------ | ------------ | ----------- | ------------ |
 | 用户注册     | 150ms        | 300ms       | 包含邮件发送 |
 | 用户登录     | 80ms         | 150ms       | JWT 令牌生成 |
-| 获取文章列表 | 100ms        | 200ms       | 20 条记录/页 |
+| 获取文章列表 | 100ms        | 200ms       | 10 条记录/页 |
 | 获取文章详情 | 50ms         | 100ms       | 单条记录     |
 | 创建文章     | 120ms        | 250ms       | 包含权限分配 |
 | 创建评论     | 90ms         | 180ms       | 包含权限分配 |
@@ -1385,7 +1427,7 @@ def article_list(request):
 ```python
 # settings.py
 REST_FRAMEWORK = {
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 10,  # 实际配置为10
     'PAGE_SIZE_QUERY_PARAM': 'page_size',
     'MAX_PAGE_SIZE': 100,
 }
@@ -1395,8 +1437,8 @@ REST_FRAMEWORK = {
 
 1. **文章列表分页**:
 
-   - 默认每页 20 条
-   - 最大每页 100 条
+   - 默认每页 10 条
+   - 最大每页 100 条（需要在settings.py中添加此配置）
    - 使用 `page` 和 `page_size` 参数
 
 2. **评论分页**:
@@ -1498,6 +1540,183 @@ def create_article(request):
         logger.error(f'Article creation failed. User: {request.user.id}, Error: {str(e)}, Time: {time.time() - start_time:.2f}s')
         raise
 ```
+
+---
+
+## 数据统计功能
+
+博客平台第九阶段新增了数据统计功能，用于跟踪用户活跃度和文章热度。
+
+### 9.1 用户活跃度统计
+
+#### 实现机制
+
+系统通过 `UserActivityMiddleware` 中间件自动记录用户登录活动：
+
+1. **IP地址记录**：每次成功登录时记录用户的IP地址
+2. **登录计数**：自动累计用户的总登录次数
+3. **自动触发**：无需额外API调用，在用户登录时自动执行
+
+#### 数据字段
+
+| 字段名 | 类型 | 说明 | API可见性 |
+|--------|------|------|-----------|
+| last_login_ip | GenericIPAddressField | 最后登录IP | ❌ 不在API响应中 |
+| login_count | PositiveIntegerField | 总登录次数 | ❌ 不在API响应中 |
+
+> **注意**: 这些统计数据目前仅用于后台管理和安全审计，不会在用户API响应中返回。`UserSerializer` 中未包含这些字段，如需在前端展示，需要：
+> 1. 在 `UserSerializer` 的 `fields` 列表中添加 `'last_login_ip'` 和 `'login_count'`
+> 2. 或创建专门的用户统计API端点（推荐用于敏感数据）
+
+#### 中间件工作流程
+
+```python
+# 简化的中间件逻辑
+class UserActivityMiddleware:
+    def __call__(self, request):
+        # 1. 捕获登录请求的邮箱
+        login_email = self.capture_login_email(request)
+        
+        # 2. 处理请求
+        response = self.get_response(request)
+        
+        # 3. 如果是成功的登录请求，记录活动
+        if login_successful:
+            user.last_login_ip = get_client_ip(request)
+            user.login_count += 1
+            user.save()
+```
+
+### 9.2 文章访问统计
+
+#### 实现机制
+
+文章访问统计在获取文章详情时自动触发：
+
+1. **自动计数**：访问已发布文章时自动增加 `view_count`
+2. **并发安全**：使用 Django F 表达式避免竞态条件
+3. **条件限制**：仅统计已发布文章，草稿不计数
+
+#### 数据字段
+
+| 字段名 | 类型 | 说明 | API可见性 |
+|--------|------|------|-----------|
+| view_count | PositiveIntegerField | 文章访问次数 | ✅ 在所有文章API中返回 |
+
+#### API响应示例
+
+```json
+{
+  "id": 1,
+  "title": "热门文章",
+  "content": "...",
+  "author": {...},
+  "created_at": "2025-06-19T14:30:00Z",
+  "updated_at": "2025-06-19T14:30:00Z",
+  "status": "published",
+  "view_count": 1024  // 新增字段
+}
+```
+
+#### 实现代码示例
+
+```python
+# articles/views.py
+def retrieve(self, request, *args, **kwargs):
+    instance = self.get_object()
+    
+    # 只统计已发布文章
+    if instance.status == Article.Status.PUBLISHED:
+        # 使用F表达式确保并发安全
+        Article.objects.filter(pk=instance.pk).update(
+            view_count=F('view_count') + 1
+        )
+        instance.refresh_from_db()
+    
+    serializer = self.get_serializer(instance)
+    return Response(serializer.data)
+```
+
+### 9.3 统计数据使用场景
+
+#### 后台管理
+
+1. **用户活跃度报表**
+   - 识别活跃用户
+   - 监控异常登录行为
+   - IP地址安全审计
+
+2. **内容热度分析**
+   - 热门文章排行榜
+   - 内容推荐算法基础
+   - 作者影响力评估
+
+#### 前端展示建议
+
+1. **文章列表页**
+   ```javascript
+   // 显示访问量
+   <span className="view-count">
+     <Icon type="eye" /> {article.view_count}
+   </span>
+   ```
+
+2. **热门文章组件**
+   ```javascript
+   // 获取热门文章
+   const hotArticles = articles
+     .filter(a => a.status === 'published')
+     .sort((a, b) => b.view_count - a.view_count)
+     .slice(0, 10);
+   ```
+
+3. **文章详情页**
+   ```javascript
+   // 实时显示访问量
+   <div className="article-stats">
+     <span>阅读量：{article.view_count}</span>
+     <span>发布时间：{formatDate(article.created_at)}</span>
+   </div>
+   ```
+
+### 9.4 未来扩展建议
+
+#### 1. 创建统计API端点
+
+```python
+# 建议的新API端点
+GET /api/statistics/user-activity/     # 用户活跃度统计
+GET /api/statistics/popular-articles/  # 热门文章排行
+GET /api/statistics/author-stats/      # 作者统计数据
+```
+
+#### 2. 增强统计功能
+
+- **阅读时长统计**：记录用户在文章页面的停留时间
+- **用户行为分析**：点赞、收藏、分享等行为统计
+- **实时统计**：使用 WebSocket 实现实时访问量更新
+- **统计可视化**：集成图表库展示统计数据
+
+#### 3. 性能优化
+
+- **缓存热门数据**：使用 Redis 缓存高频访问的统计数据
+- **异步统计**：使用 Celery 异步处理统计任务
+- **定期汇总**：创建统计汇总表，减少实时计算
+
+### 9.5 注意事项
+
+1. **隐私保护**
+   - IP地址属于敏感信息，仅供内部使用
+   - 遵守相关隐私法规（如GDPR）
+   - 提供用户数据导出和删除功能
+
+2. **性能影响**
+   - 文章访问统计使用F表达式，性能影响极小
+   - 用户活动统计仅在登录时触发，不影响常规请求
+
+3. **数据准确性**
+   - 防止恶意刷访问量（可添加访问频率限制）
+   - 区分真实用户和爬虫访问（可结合User-Agent分析）
 
 ---
 

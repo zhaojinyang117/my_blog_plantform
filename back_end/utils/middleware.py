@@ -46,34 +46,111 @@ class AdminOnlyMiddleware(MiddlewareMixin):
         return None
 
 
-class UserActivityMiddleware(MiddlewareMixin):
+class UserActivityMiddleware:
     """
     用户活动记录中间件
     
     记录用户的登录活动，包括登录次数和IP地址
-    为后续的数据统计功能做准备
+    使用现代Django中间件风格，可以在请求前后处理数据
     """
     
-    def process_request(self, request):
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # 在处理请求前，如果是登录请求则捕获邮箱信息
+        login_email = self.capture_login_email(request)
+        
+        # 处理请求
+        response = self.get_response(request)
+        
+        # 处理响应 - 检查是否为成功登录
+        if (login_email and 
+            request.path == '/api/users/token/' and 
+            request.method == 'POST' and 
+            response.status_code == 200):
+            
+            self.record_user_activity(login_email, request)
+        
+        return response
+    
+    def capture_login_email(self, request):
         """
-        处理请求，记录用户活动信息
+        在请求处理前捕获登录邮箱信息
         
         Args:
             request: HTTP请求对象
+            
+        Returns:
+            str: 用户邮箱或None
         """
-        # 只记录已认证用户的活动
-        if request.user.is_authenticated and hasattr(request.user, 'login_count'):
-            # 获取客户端IP地址
-            client_ip = self.get_client_ip(request)
+        if (request.path == '/api/users/token/' and 
+            request.method == 'POST'):
             
-            # 更新用户活动信息（这里先预留，等后续阶段实现）
-            # request.user.last_login_ip = client_ip
-            # request.user.login_count += 1
-            # request.user.save(update_fields=['last_login_ip', 'login_count'])
-            
-            logger.debug(f"用户 {request.user.email} 活动记录: IP={client_ip}")
+            try:
+                import json
+                
+                # 尝试从不同来源获取邮箱
+                email = None
+                
+                # 首先尝试从POST数据获取（表单提交）
+                if hasattr(request, 'POST') and request.POST:
+                    email = request.POST.get('email')
+                    logger.debug(f"从POST获取登录邮箱: {email}")
+                
+                # 如果POST中没有，尝试从body获取（JSON提交）
+                if not email and hasattr(request, 'body') and request.body:
+                    try:
+                        # 读取原始body数据
+                        body_data = request.body.decode('utf-8')
+                        data = json.loads(body_data)
+                        email = data.get('email')
+                        logger.debug(f"从body获取登录邮箱: {email}")
+                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                        logger.debug(f"解析body数据失败: {e}")
+                
+                if email:
+                    logger.debug(f"成功捕获登录邮箱: {email}")
+                    return email
+                else:
+                    logger.debug("未能捕获登录邮箱")
+                    
+            except Exception as e:
+                logger.error(f"捕获登录邮箱时出错: {e}")
         
         return None
+    
+    def record_user_activity(self, email, request):
+        """
+        记录用户活动信息
+        
+        Args:
+            email: 用户邮箱
+            request: HTTP请求对象
+        """
+        try:
+            from django.contrib.auth import get_user_model
+            
+            User = get_user_model()
+            
+            # 获取客户端IP地址
+            client_ip = self.get_client_ip(request)
+            logger.debug(f"获取到客户端IP: {client_ip}")
+            
+            # 查找用户并更新活动信息
+            user = User.objects.get(email=email, is_active=True)
+            
+            # 更新用户活动信息
+            user.last_login_ip = client_ip
+            user.login_count += 1
+            user.save(update_fields=['last_login_ip', 'login_count'])
+            
+            logger.info(f"用户 {user.email} 活动更新: IP={client_ip}, 登录次数={user.login_count}")
+            
+        except User.DoesNotExist:
+            logger.warning(f"用户不存在: {email}")
+        except Exception as e:
+            logger.error(f"更新用户活动信息失败: {e}")
     
     def get_client_ip(self, request):
         """

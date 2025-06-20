@@ -85,6 +85,19 @@ class User(AbstractUser):
         blank=True,
         help_text=_("用于邮箱验证的token"),
     )
+    
+    # 阶段9：用户活跃度统计字段
+    last_login_ip = models.GenericIPAddressField(
+        _("最后登录IP"),
+        null=True,
+        blank=True,
+        help_text=_("用户最后一次登录的IP地址")
+    )
+    login_count = models.PositiveIntegerField(
+        _("登录次数"),
+        default=0,
+        help_text=_("用户总登录次数")
+    )
 
     # 使用自定义用户管理器
     objects = UserManager()  # type: ignore

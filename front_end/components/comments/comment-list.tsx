@@ -34,9 +34,10 @@ export default function CommentList({ articleId }: CommentListProps) {
       } else {
         console.warn("评论数据不是数组格式:", fetchedComments)
         console.warn("尝试从results字段获取数据...")
-        if (fetchedComments && fetchedComments.results && Array.isArray(fetchedComments.results)) {
-          console.log(`从results字段获取到${fetchedComments.results.length}条评论`)
-          setComments(fetchedComments.results)
+        const anyComments = fetchedComments as any
+        if (anyComments && anyComments.results && Array.isArray(anyComments.results)) {
+          console.log(`从results字段获取到${anyComments.results.length}条评论`)
+          setComments(anyComments.results)
         } else {
           setComments([])
         }
@@ -50,7 +51,25 @@ export default function CommentList({ articleId }: CommentListProps) {
   }
 
   useEffect(() => {
-    fetchComments()
+    // 使用AbortController避免重复请求
+    const controller = new AbortController()
+    
+    const loadComments = async () => {
+      try {
+        await fetchComments()
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          console.error("加载评论时出错:", error)
+        }
+      }
+    }
+    
+    loadComments()
+    
+    // 清理函数
+    return () => {
+      controller.abort()
+    }
   }, [articleId])
 
   const handleCommentUpdated = () => {

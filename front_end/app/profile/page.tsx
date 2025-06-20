@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { User, Mail, Edit3, Save, X, AlertCircle, CheckCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import AvatarUpload from "@/components/user/avatar-upload"
+import ArticleStats from "@/components/articles/article-stats"
 import api from "@/lib/api"
 
 export default function ProfilePage() {
@@ -290,6 +291,19 @@ export default function ProfilePage() {
                 </>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* 文章统计 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>文章统计</CardTitle>
+            <CardDescription>
+              您的文章数据概览
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ArticleStats userId={user.id} />
           </CardContent>
         </Card>
       </div>

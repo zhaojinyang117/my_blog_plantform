@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import api from "@/lib/api"
-import { Article } from "@/types/article"
+import { Article } from "@/lib/types"
+import { getCachedArticle, setCachedArticle } from "@/lib/article-cache"
 import ReactMarkdown from "react-markdown"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CalendarDays, Lock } from "lucide-react"
+import { CalendarDays, Lock, Eye } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -23,16 +24,48 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
   const [article, setArticle] = useState<Article | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const fetchInProgressRef = useRef<boolean>(false)
 
   useEffect(() => {
+    let isMounted = true
+
     async function fetchArticle() {
+      // 如果已经有请求在进行，直接返回
+      if (fetchInProgressRef.current) {
+        console.log("Request already in progress, skipping duplicate request")
+        return
+      }
+
+      // 取消之前的请求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      // 创建新的 AbortController
+      abortControllerRef.current = new AbortController()
+      const signal = abortControllerRef.current.signal
+
       try {
-        setLoading(true)
         setError(null)
+        fetchInProgressRef.current = true
 
-        console.log("Fetching article:", articleId, "User authenticated:", isAuthenticated)
+        // 先检查缓存
+        const cachedArticle = getCachedArticle(articleId)
+        if (cachedArticle) {
+          console.log("Using cached article:", articleId)
+          setArticle(cachedArticle)
+          setLoading(false)
+          fetchInProgressRef.current = false
+          return
+        }
 
-        const fetchedArticle = await api.getArticle(articleId)
+        setLoading(true)
+        console.log("Fetching article:", articleId, "at", new Date().toISOString())
+
+        const fetchedArticle = await api.getArticleWithSignal(articleId, signal)
+
+        if (!isMounted || signal.aborted) return
 
         if (!fetchedArticle) {
           setError("文章未找到")
@@ -45,8 +78,18 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           return
         }
 
+        // 缓存文章数据
+        setCachedArticle(articleId, fetchedArticle)
         setArticle(fetchedArticle)
       } catch (err: any) {
+        if (!isMounted || signal.aborted) return
+        
+        // 忽略中止错误
+        if (err.name === 'AbortError') {
+          console.log("Request was aborted")
+          return
+        }
+
         console.error("Failed to fetch article:", err)
 
         if (err.message?.includes('401') || err.message?.includes('认证')) {
@@ -59,12 +102,24 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           setError("加载文章时出现错误")
         }
       } finally {
-        setLoading(false)
+        if (isMounted && !signal.aborted) {
+          setLoading(false)
+          fetchInProgressRef.current = false
+        }
       }
     }
 
     fetchArticle()
-  }, [articleId, user, isAuthenticated])
+
+    return () => {
+      isMounted = false
+      // 组件卸载时取消请求（只在请求进行中时取消）
+      if (abortControllerRef.current && fetchInProgressRef.current) {
+        abortControllerRef.current.abort()
+        fetchInProgressRef.current = false
+      }
+    }
+  }, [articleId, user])
 
   if (loading) {
     return (
@@ -165,6 +220,11 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
               })}
             </time>
           </div>
+          <span>•</span>
+          <div className="flex items-center">
+            <Eye className="h-5 w-5 mr-1.5" />
+            <span>{article.view_count || 0} 次阅读</span>
+          </div>
           {article.status === "draft" && (
             <>
               <span>•</span>
@@ -174,7 +234,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
         </div>
       </div>
 
-      <ArticleActions articleId={article.id} authorId={article.author.id} />
+      <ArticleActions articleId={article.id.toString()} authorId={article.author.id.toString()} />
 
       <ReactMarkdown
         components={{
@@ -185,7 +245,8 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
           blockquote: ({ ...props }) => (
             <blockquote className="border-l-4 border-primary pl-4 italic my-4 text-muted-foreground" {...props} />
           ),
-          code: ({ inline, className, children, ...props }) => {
+          code: ({ className, children, ...props }: any) => {
+            const inline = props.inline;
             const match = /language-(\w+)/.exec(className ?? "")
             return !inline && match ? (
               <pre className="bg-muted p-4 rounded-md overflow-x-auto my-4">
@@ -206,7 +267,7 @@ export default function ArticleDetailClient({ articleId }: ArticleDetailClientPr
 
       {/* 评论区域 */}
       <div className="mt-12 border-t pt-8">
-        <CommentList articleId={article.id} />
+        <CommentList articleId={article.id.toString()} />
       </div>
     </article>
   )

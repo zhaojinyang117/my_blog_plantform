@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { LogIn, LogOut, UserIcon, Newspaper, AlertCircle, Menu, X } from "lucide-react"
+import { LogIn, LogOut, UserIcon, Newspaper, AlertCircle, Menu, X, BarChart } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 export default function Navbar() {
@@ -32,6 +32,9 @@ export default function Navbar() {
             <nav className="hidden md:flex items-center space-x-6 lg:space-x-8">
               <Link href="/" className={navLinkClasses("/")}>
                 首页
+              </Link>
+              <Link href="/stats" className={navLinkClasses("/stats")}>
+                数据统计
               </Link>
               {isAuthenticated && (
                 <>
@@ -109,6 +112,13 @@ export default function Navbar() {
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       首页
+                    </Link>
+                    <Link
+                      href="/stats"
+                      className={mobileNavLinkClasses("/stats")}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      数据统计
                     </Link>
                     {isAuthenticated && (
                       <>

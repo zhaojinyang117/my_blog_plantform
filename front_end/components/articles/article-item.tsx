@@ -3,7 +3,7 @@ import type { Article } from "@/lib/types"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CalendarDays } from "lucide-react"
+import { CalendarDays, Eye } from "lucide-react"
 
 interface ArticleItemProps {
   article: Article
@@ -33,6 +33,11 @@ export default function ArticleItem({ article }: ArticleItemProps) {
           <div className="flex items-center">
             <CalendarDays className="h-4 w-4 mr-1.5" />
             <time dateTime={article.created_at}>{new Date(article.created_at).toLocaleDateString("zh-CN")}</time>
+          </div>
+          <span>•</span>
+          <div className="flex items-center">
+            <Eye className="h-4 w-4 mr-1.5" />
+            <span>{article.view_count || 0} 次阅读</span>
           </div>
         </div>
       </CardHeader>

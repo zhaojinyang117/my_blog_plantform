@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import ArticleItem from "@/components/articles/article-item"
+import PopularArticles from "@/components/articles/popular-articles"
 import api from "@/lib/api"
 import type { Article } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -115,10 +116,20 @@ export default function HomePage() {
         <h1 className="text-4xl font-bold tracking-tight">最新文章</h1>
         <DraftsButton />
       </div>
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-1">
-        {articles.map((article) => (
-          <ArticleItem key={article.id} article={article} />
-        ))}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* 主内容区 - 文章列表 */}
+        <div className="lg:col-span-2 space-y-6">
+          {articles.map((article) => (
+            <ArticleItem key={article.id} article={article} />
+          ))}
+        </div>
+        
+        {/* 侧边栏 - 热门文章 */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-4 space-y-6">
+            <PopularArticles limit={10} />
+          </div>
+        </div>
       </div>
     </div>
   )

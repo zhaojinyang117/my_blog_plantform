@@ -218,3 +218,30 @@ AUTHENTICATION_BACKENDS = (
 
 # Guardian 匿名用户配置
 ANONYMOUS_USER_NAME = None  # 禁用匿名用户权限
+
+# 阶段10：Redis缓存配置
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 50,
+                "decode_responses": True,
+            },
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            "IGNORE_EXCEPTIONS": True,  # 开发环境忽略Redis错误，避免缓存故障影响主服务
+        }
+    }
+}
+
+# 缓存键前缀设置
+CACHE_KEY_PREFIX = "blog_platform"
+
+# 缓存超时设置（秒）
+CACHE_TIMEOUT = {
+    "hot_articles": 3600,  # 热门文章缓存1小时
+    "article_detail": 1800,  # 文章详情缓存30分钟
+    "article_list": 600,  # 文章列表缓存10分钟
+}

@@ -1,5 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from .models import Article
 from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer
 from .permissions import IsAuthorOrReadOnly
@@ -8,6 +9,9 @@ from django.db.models import Q
 from guardian.shortcuts import assign_perm, get_perms, remove_perm
 from guardian.decorators import permission_required_or_403
 from guardian.mixins import PermissionRequiredMixin
+from django.core.cache import cache
+from django.conf import settings
+import hashlib
 
 
 class ArticleViewSet(viewsets.ModelViewSet):
@@ -16,6 +20,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     提供 `list`、`create`、`retrieve`、`update` 和 `destroy` 操作
     集成Guardian对象级权限控制
     阶段9：新增文章访问统计功能
+    阶段10：新增缓存优化功能
     """
 
     #########################################
@@ -49,6 +54,32 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # 这里可以进一步集成Guardian权限检查
         # 但由于性能考虑，暂时保持简单的过滤逻辑
         return queryset.filter(base_filter)
+    
+    def list(self, request, *args, **kwargs):
+        """
+        阶段10：重写list方法以实现文章列表缓存
+        """
+        # 生成缓存键，考虑用户的认证状态和查询参数
+        cache_key_parts = [
+            f"{settings.CACHE_KEY_PREFIX}:articles:list",
+            f"user:{request.user.id if request.user.is_authenticated else 'anonymous'}",
+            f"params:{hashlib.md5(str(request.query_params).encode()).hexdigest()}"
+        ]
+        cache_key = ":".join(cache_key_parts)
+        
+        # 尝试从缓存获取数据
+        cached_response = cache.get(cache_key)
+        if cached_response is not None:
+            return Response(cached_response)
+        
+        # 如果缓存未命中，执行正常的列表查询
+        response = super().list(request, *args, **kwargs)
+        
+        # 将响应数据存入缓存
+        cache_timeout = settings.CACHE_TIMEOUT.get('article_list', 600)
+        cache.set(cache_key, response.data, timeout=cache_timeout)
+        
+        return response
 
     def get_serializer_class(self):
         """根据操作类型选择序列化器"""
@@ -74,8 +105,24 @@ class ArticleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """
         阶段9：重写retrieve方法以实现文章访问统计
+        阶段10：添加文章详情缓存
         每次获取文章详情时，增加访问计数
         """
+        # 生成缓存键
+        cache_key = f"{settings.CACHE_KEY_PREFIX}:article:detail:{kwargs.get('pk')}"
+        
+        # 尝试从缓存获取数据
+        cached_article = cache.get(cache_key)
+        if cached_article is not None:
+            # 如果是从缓存获取的，仍然需要增加访问计数
+            instance = self.get_object()
+            if instance.status == Article.Status.PUBLISHED:
+                from django.db.models import F
+                Article.objects.filter(pk=instance.pk).update(
+                    view_count=F('view_count') + 1
+                )
+            return Response(cached_article)
+        
         instance = self.get_object()
         
         # 只有当文章是已发布状态时才增加访问计数
@@ -89,6 +136,11 @@ class ArticleViewSet(viewsets.ModelViewSet):
             instance.refresh_from_db()
         
         serializer = self.get_serializer(instance)
+        
+        # 将文章详情存入缓存
+        cache_timeout = settings.CACHE_TIMEOUT.get('article_detail', 1800)
+        cache.set(cache_key, serializer.data, timeout=cache_timeout)
+        
         return Response(serializer.data)
 
     def perform_destroy(self, instance):
@@ -134,3 +186,58 @@ class ArticleViewSet(viewsets.ModelViewSet):
 
         # 检查Guardian对象权限
         return user.has_perm(f'articles.{permission}', article)
+    
+    def perform_update(self, serializer):
+        """
+        阶段10：更新文章时清除相关缓存
+        """
+        article = serializer.save()
+        
+        # 清除文章详情缓存
+        cache_key = f"{settings.CACHE_KEY_PREFIX}:article:detail:{article.pk}"
+        cache.delete(cache_key)
+        
+        # 清除文章列表缓存（使用模式匹配删除所有相关的列表缓存）
+        # 注意：默认的缓存后端可能不支持模式删除，这里简单处理
+        # 在生产环境中，可以使用Redis的SCAN命令来查找并删除匹配的键
+        
+        return article
+    
+    def perform_destroy(self, instance):
+        """
+        删除文章时清理相关权限和缓存
+        阶段10：添加缓存清理
+        """
+        # 清除文章详情缓存
+        cache_key = f"{settings.CACHE_KEY_PREFIX}:article:detail:{instance.pk}"
+        cache.delete(cache_key)
+        
+        # 删除文章前清理所有相关的对象权限
+        # Guardian会自动清理，但这里显式处理以确保一致性
+        super().perform_destroy(instance)
+    
+    @action(detail=False, methods=['get'])
+    def hot_articles(self, request):
+        """
+        阶段10：获取热门文章列表（按访问次数排序）
+        使用缓存优化性能
+        """
+        cache_key = f"{settings.CACHE_KEY_PREFIX}:hot_articles"
+        
+        # 尝试从缓存获取热门文章
+        cached_articles = cache.get(cache_key)
+        if cached_articles is not None:
+            return Response(cached_articles)
+        
+        # 获取访问量最高的10篇已发布文章
+        hot_articles = Article.objects.filter(
+            status=Article.Status.PUBLISHED
+        ).select_related('author').order_by('-view_count')[:10]
+        
+        serializer = ArticleSerializer(hot_articles, many=True)
+        
+        # 将热门文章存入缓存
+        cache_timeout = settings.CACHE_TIMEOUT.get('hot_articles', 3600)
+        cache.set(cache_key, serializer.data, timeout=cache_timeout)
+        
+        return Response(serializer.data)

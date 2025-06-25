@@ -6,7 +6,7 @@ from .serializers import CommentSerializer
 from .permissions import IsCommentUserOrReadOnly
 # 评论不允许编辑，只允许创建和删除
 from django.shortcuts import get_object_or_404
-from guardian.shortcuts import assign_perm, get_perms, remove_perm
+from guardian.shortcuts import assign_perm, get_perms
 
 class CommentViewSet(viewsets.ModelViewSet):
     """

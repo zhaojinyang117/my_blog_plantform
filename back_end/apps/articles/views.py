@@ -1,15 +1,12 @@
-from rest_framework import viewsets, permissions, generics, filters
+from rest_framework import viewsets, permissions, generics
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import Article
 from .serializers import ArticleSerializer, ArticleCreateUpdateSerializer, ArticleSearchSerializer
-from .permissions import IsAuthorOrReadOnly
-from utils.permissions import CanEditArticle, IsStaffOrOwnerOrReadOnly
+from utils.permissions import CanEditArticle
 from utils.search import SearchQueryBuilder, SearchCache, validate_search_params
 from django.db.models import Q
-from guardian.shortcuts import assign_perm, get_perms, remove_perm
-from guardian.decorators import permission_required_or_403
-from guardian.mixins import PermissionRequiredMixin
+from guardian.shortcuts import assign_perm, get_perms
 from django.core.cache import cache
 from django.conf import settings
 import hashlib
@@ -25,7 +22,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
     """
 
     #########################################
-    # queryset的获取后续可以优化性能           #
+    # queryset的获取等以后可以优化性能          #
     #########################################
     queryset = Article.objects.all()
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, CanEditArticle]
@@ -51,9 +48,6 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # 2. 其他人的已发布文章
         # 3. 有特殊权限的草稿文章
         base_filter = Q(author=user) | Q(status=Article.Status.PUBLISHED)
-
-        # 这里可以进一步集成Guardian权限检查
-        # 但由于性能考虑，暂时保持简单的过滤逻辑
         return queryset.filter(base_filter)
     
     def list(self, request, *args, **kwargs):
@@ -149,7 +143,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         删除文章时清理相关权限
         """
         # 删除文章前清理所有相关的对象权限
-        # Guardian会自动清理，但这里显式处理以确保一致性
+        # Guardian会自动清理
         super().perform_destroy(instance)
 
     def get_object_permissions(self, obj):
@@ -197,11 +191,11 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # 清除文章详情缓存
         cache_key = f"{settings.CACHE_KEY_PREFIX}:article:detail:{article.pk}"
         cache.delete(cache_key)
-        
-        # 清除文章列表缓存（使用模式匹配删除所有相关的列表缓存）
-        # 注意：默认的缓存后端可能不支持模式删除，这里简单处理
-        # 在生产环境中，可以使用Redis的SCAN命令来查找并删除匹配的键
-        
+        ##########################################################
+        # 清除文章列表缓存（使用模式匹配删除所有相关的列表缓存）         #
+        # 注意：默认的缓存后端可能不支持模式删除，这里简单处理           #
+        # 在生产环境中，可以使用Redis的SCAN命令来查找并删除匹配的键     #
+        ##########################################################
         return article
     
     def perform_destroy(self, instance):
@@ -214,7 +208,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         cache.delete(cache_key)
         
         # 删除文章前清理所有相关的对象权限
-        # Guardian会自动清理，但这里显式处理以确保一致性
+        # Guardian会自动清理
         super().perform_destroy(instance)
     
     @action(detail=False, methods=['get'])
@@ -230,7 +224,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         if cached_articles is not None:
             return Response(cached_articles)
         
-        # 获取访问量最高的10篇已发布文章
+        # 获取访问量最高的10篇已发布文章(感觉这个其实也可以移到环境变量, 不过没差)
         hot_articles = Article.objects.filter(
             status=Article.Status.PUBLISHED
         ).select_related('author').order_by('-view_count')[:10]
@@ -250,7 +244,7 @@ class ArticleSearchView(generics.ListAPIView):
     支持按标题、内容、作者搜索
     """
     serializer_class = ArticleSearchSerializer
-    permission_classes = [permissions.AllowAny]  # 搜索功能对所有用户开放
+    permission_classes = [permissions.AllowAny]  # 搜索功能对所有用户开放(但其实有被cc的隐患, 这玩意还听池性能的)
 
     def get_queryset(self):
         """

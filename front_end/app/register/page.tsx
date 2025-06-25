@@ -31,10 +31,12 @@ export default function RegisterPage() {
     setError(null)
     setIsLoading(true)
     try {
-      await api.register({ username, email, password })
+      const response = await api.register({ username, email, password })
+      console.log("Registration response:", response)
       setRegisteredEmail(email)
       setRegistrationSuccess(true)
     } catch (err: any) {
+      console.error("Registration error:", err)
       setError(err.message || "注册失败，请稍后再试。")
     } finally {
       setIsLoading(false)

@@ -1,9 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.utils.html import format_html
-from django.urls import reverse
 from guardian.admin import GuardedModelAdmin
-from guardian.shortcuts import get_users_with_perms, get_groups_with_perms
+from guardian.shortcuts import get_users_with_perms
 from .models import Article, ArticleUserObjectPermission, ArticleGroupObjectPermission
 from utils.permission_manager import ArticlePermissionManager
 

@@ -20,7 +20,7 @@ export default function ProfilePage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  
+
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,7 +89,7 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('更新个人信息失败:', error)
       setError(error instanceof Error ? error.message : '更新失败，请稍后再试')
-      
+
       toast({
         title: "更新失败",
         description: error instanceof Error ? error.message : '请稍后再试',
@@ -141,8 +141,8 @@ export default function ProfilePage() {
         </div>
 
         {/* 头像上传 */}
-        <AvatarUpload 
-          currentAvatar={currentAvatar} 
+        <AvatarUpload
+          currentAvatar={currentAvatar}
           onAvatarUpdated={handleAvatarUpdated}
         />
 
@@ -160,8 +160,8 @@ export default function ProfilePage() {
                 </CardDescription>
               </div>
               {!isEditing && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => setIsEditing(true)}
                 >
@@ -236,15 +236,15 @@ export default function ProfilePage() {
               <>
                 <Separator />
                 <div className="flex gap-2 justify-end">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={handleCancel}
                     disabled={isSaving}
                   >
                     <X className="h-4 w-4 mr-2" />
                     取消
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSave}
                     disabled={isSaving}
                   >

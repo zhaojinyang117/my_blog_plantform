@@ -11,7 +11,6 @@ router.register(r"", ArticleViewSet, basename="article")
 
 # 嵌套路由，用于文章下的评论管理
 # 生成的URL: /api/articles/{article_pk}/comments/
-# 这种设计符合RESTful原则，评论作为文章的子资源
 articles_router = NestedSimpleRouter(
     router,  # 父路由
     r"",  # 父路由前缀（对应ArticleViewSet）

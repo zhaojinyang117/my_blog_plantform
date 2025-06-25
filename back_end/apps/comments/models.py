@@ -25,7 +25,7 @@ class Comment(models.Model):
         related_name='comments',
         verbose_name=_("文章")
     )
-    # 关联用户 当用户被删除时，相关的评论也会被级联删除
+    # 关联用户 当用户被删除时，相关的评论也会被级联删除(这个其实可以存疑, 因为用户更多是封号,移除激活状态, 而不是真的删除)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

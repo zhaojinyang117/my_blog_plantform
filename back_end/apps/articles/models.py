@@ -9,6 +9,8 @@ User = get_user_model()
 class Article(models.Model):
     """
     文章模型
+    有两种状态, 一种是草稿, 一种是已发布, 已发布可以在文章池中被公开检索到, 默认是草稿状态
+    其实还可以增加一种状态, 就是已删除, 已删除的文章不能被检索到, 但是可以被恢复
     """
 
     class Status(models.TextChoices):
@@ -29,7 +31,6 @@ class Article(models.Model):
         _("状态"), max_length=10, choices=Status.choices, default=Status.DRAFT
     )
     
-    # 阶段9：文章访问统计字段
     view_count = models.PositiveIntegerField(
         _("访问次数"),
         default=0,

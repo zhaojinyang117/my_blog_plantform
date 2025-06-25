@@ -12,6 +12,10 @@ For the full list of settings and their values, see
 
 from pathlib import Path
 from datetime import timedelta
+import pymysql
+
+# 使用 pymysql 作为 MySQL 驱动
+pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +42,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # apps/下的app
     "apps.articles",
     "apps.users",
     "apps.comments",
@@ -58,7 +63,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "utils.middleware.AdminOnlyMiddleware",  # 管理后台权限控制中间件
+    "utils.middleware.AdminOnlyMiddleware",  # 管理后台权限控制中间件（已修复）
     "utils.middleware.UserActivityMiddleware",  # 阶段9：用户活动统计中间件
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -87,10 +92,27 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # <https://docs.djangoproject.com/en/5.2/ref/settings/#databases>
 
+# SQLite 数据库配置 (已注释)
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
+
+# MySQL 数据库配置 (使用 pymysql)
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "my_blog_platform",
+        "USER": "root",
+        "PASSWORD": "",
+        "HOST": "localhost",
+        "PORT": "3306",
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
     }
 }
 
@@ -136,7 +158,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 #############################
-#后续可以改成用bytes64写进数据库#
+# 以后可以改成用bytes64写进数据库#
 #############################
 
 # Default primary key field type
@@ -194,7 +216,7 @@ AUTH_USER_MODEL = "users.User"
 EMAIL_BACKEND = (
     "django.core.mail.backends.console.EmailBackend"  # 开发环境使用控制台输出
 )
-# 生产环境邮件配置示例（后面放进.env中）:
+# 生产环境邮件配置示例（后面可以放进.env中,明文存储太危险了）:
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 # EMAIL_HOST = 'smtp.gmail.com'  # 邮件服务器
 # EMAIL_PORT = 587
@@ -212,8 +234,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = FILE_UPLOAD_MAX_MEMORY_SIZE
 
 # Django Guardian 配置
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',  # 默认认证后端
-    'guardian.backends.ObjectPermissionBackend',  # Guardian对象权限后端
+    "django.contrib.auth.backends.ModelBackend",  # 默认认证后端
+    "guardian.backends.ObjectPermissionBackend",  # Guardian对象权限后端
 )
 
 # Guardian 匿名用户配置
@@ -232,7 +254,7 @@ CACHES = {
             },
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
             "IGNORE_EXCEPTIONS": True,  # 开发环境忽略Redis错误，避免缓存故障影响主服务
-        }
+        },
     }
 }
 

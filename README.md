@@ -1,5 +1,8 @@
 # my_blog_plantform
 
+
+前端安装依赖: --legacy-peer-deps
+
 blog平台
 
 好的，很乐意为您规划一个 Django + React 前后端分离的博客平台（基础版）开发计划。

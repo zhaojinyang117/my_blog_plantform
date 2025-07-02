@@ -1,0 +1,1385 @@
+openapi: 3.0.3
+info:
+  title: 博客平台 API
+  version: 1.0.0
+  description: 一个功能完整的博客平台后端API，支持用户管理、文章发布、评论系统等功能
+  contact:
+    name: 博客平台开发团队
+    email: dev@blog.com
+  license:
+    name: MIT License
+paths:
+  /api/articles/:
+    get:
+      operationId: api_articles_list
+      description: 获取文章列表，支持分页。未登录用户只能看到已发布文章，登录用户可以看到自己的草稿
+      summary: 获取文章列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - 文章管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedArticleList'
+          description: ''
+    post:
+      operationId: api_articles_create
+      description: 创建新文章，需要登录
+      summary: 创建文章
+      tags:
+      - 文章管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+          description: ''
+  /api/articles/{article_pk}/comments/:
+    get:
+      operationId: api_articles_comments_list
+      description: 获取指定文章下的所有评论，包含嵌套回复结构
+      summary: 获取文章评论列表
+      parameters:
+      - in: path
+        name: article_pk
+        schema:
+          type: string
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - 评论系统
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCommentList'
+          description: ''
+    post:
+      operationId: api_articles_comments_create
+      description: 为指定文章创建新评论或回复，需要登录
+      summary: 创建评论
+      parameters:
+      - in: path
+        name: article_pk
+        schema:
+          type: string
+        required: true
+      tags:
+      - 评论系统
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 文章不存在
+          description: ''
+  /api/articles/{article_pk}/comments/{id}/:
+    get:
+      operationId: api_articles_comments_retrieve
+      description: 获取指定评论的详细信息
+      summary: 获取评论详情
+      parameters:
+      - in: path
+        name: article_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 评论系统
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 评论不存在
+          description: ''
+    delete:
+      operationId: api_articles_comments_destroy
+      description: 删除评论，只有评论作者或管理员可以操作
+      summary: 删除评论
+      parameters:
+      - in: path
+        name: article_pk
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - 评论系统
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: 删除成功
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: 无权限
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 评论不存在
+          description: ''
+  /api/articles/{id}/:
+    get:
+      operationId: api_articles_retrieve
+      description: 获取指定文章的详细信息，会增加文章的访问计数
+      summary: 获取文章详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 文章.
+        required: true
+      tags:
+      - 文章管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 文章不存在
+          description: ''
+    put:
+      operationId: api_articles_update
+      description: 更新文章信息，只有作者或管理员可以操作
+      summary: 更新文章
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 文章.
+        required: true
+      tags:
+      - 文章管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ArticleCreateUpdateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: 无权限
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 文章不存在
+          description: ''
+    patch:
+      operationId: api_articles_partial_update
+      description: 部分更新文章信息，只有作者或管理员可以操作
+      summary: 部分更新文章
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 文章.
+        required: true
+      tags:
+      - 文章管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedArticleCreateUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedArticleCreateUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedArticleCreateUpdateRequest'
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: 无权限
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 文章不存在
+          description: ''
+    delete:
+      operationId: api_articles_destroy
+      description: 删除文章，只有作者或管理员可以操作
+      summary: 删除文章
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 文章.
+        required: true
+      tags:
+      - 文章管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '204':
+          content:
+            application/json:
+              schema:
+                description: 删除成功
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                description: 无权限
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                description: 文章不存在
+          description: ''
+  /api/articles/hot_articles/:
+    get:
+      operationId: api_articles_hot_articles_retrieve
+      description: |-
+        阶段10：获取热门文章列表（按访问次数排序）
+        使用缓存优化性能
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Article'
+          description: ''
+  /api/articles/search/:
+    get:
+      operationId: api_articles_search_list
+      description: 根据关键词搜索已发布的文章，支持按标题、内容、作者搜索
+      summary: 搜索文章
+      parameters:
+      - in: query
+        name: ordering
+        schema:
+          type: string
+          enum:
+          - -created_at
+          - -title
+          - -view_count
+          - created_at
+          - title
+          - view_count
+        description: 排序方式：-created_at(最新)、created_at(最早)、-view_count(最热)、view_count(最冷)、title(标题A-Z)、-title(标题Z-A)
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: 搜索关键词
+        required: true
+      - in: query
+        name: type
+        schema:
+          type: string
+          enum:
+          - all
+          - author
+          - content
+          - title
+        description: 搜索类型：all(全部)、title(标题)、content(内容)、author(作者)
+      tags:
+      - 文章管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedArticleSearchList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 搜索参数无效
+                example:
+                  error: 搜索关键词不能为空
+          description: ''
+  /api/users/me/:
+    get:
+      operationId: api_users_me_retrieve
+      description: 获取当前登录用户的详细信息
+      summary: 获取当前用户信息
+      tags:
+      - 用户管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+                example:
+                  detail: 身份认证信息未提供。
+          description: ''
+  /api/users/me/avatar/:
+    put:
+      operationId: api_users_me_avatar_update
+      description: 上传并更新当前用户的头像图片
+      summary: 更新用户头像
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: 头像图片文件
+              required:
+              - avatar
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 头像更新成功
+                example:
+                  message: 头像更新成功
+                  avatar_url: /media/avatars/user_1/avatar.jpg
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+                example:
+                  error: 请选择要上传的头像文件
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+                example:
+                  detail: 身份认证信息未提供。
+          description: ''
+    patch:
+      operationId: api_users_me_avatar_partial_update
+      description: 上传并更新当前用户的头像图片
+      summary: 更新用户头像
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: 头像图片文件
+              required:
+              - avatar
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 头像更新成功
+                example:
+                  message: 头像更新成功
+                  avatar_url: /media/avatars/user_1/avatar.jpg
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+                example:
+                  error: 请选择要上传的头像文件
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+                example:
+                  detail: 身份认证信息未提供。
+          description: ''
+  /api/users/me/update/:
+    put:
+      operationId: api_users_me_update_update
+      description: 更新当前登录用户的基本信息（用户名、个人简介等）
+      summary: 更新用户信息
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+                example:
+                  username:
+                  - 该字段是必需的。
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+                example:
+                  detail: 身份认证信息未提供。
+          description: ''
+    patch:
+      operationId: api_users_me_update_partial_update
+      description: 更新当前登录用户的基本信息（用户名、个人简介等）
+      summary: 更新用户信息
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+                example:
+                  username:
+                  - 该字段是必需的。
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                description: 未认证
+                example:
+                  detail: 身份认证信息未提供。
+          description: ''
+  /api/users/register/:
+    post:
+      operationId: api_users_register_create
+      description: 创建新用户账户，注册成功后会发送邮箱验证邮件
+      summary: 用户注册
+      tags:
+      - 用户管理
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                description: 注册成功
+                example:
+                  message: 用户注册成功，请前往邮箱验证
+                  user_id: 1
+                  email: user@example.com
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 请求数据无效
+                example:
+                  username:
+                  - 该字段是必需的。
+                  email:
+                  - 请输入一个有效的邮箱地址。
+                  password:
+                  - 两次密码不一致
+          description: ''
+  /api/users/token/:
+    post:
+      operationId: api_users_token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      security:
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/users/token/refresh/:
+    post:
+      operationId: api_users_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/users/verify-email/:
+    get:
+      operationId: api_users_verify_email_retrieve
+      description: 通过验证token激活用户账户
+      summary: 邮箱验证
+      parameters:
+      - in: query
+        name: token
+        schema:
+          type: string
+        description: 邮箱验证token
+        required: true
+      tags:
+      - 用户管理
+      security:
+      - jwtAuth: []
+      - type: http
+        scheme: bearer
+        bearerFormat: JWT
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                description: 验证成功或已验证
+                example:
+                  message: 邮箱验证成功！您的账户已激活
+                  status: success
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                description: 验证失败
+                example:
+                  error: 无效的验证token
+          description: ''
+components:
+  schemas:
+    Article:
+      type: object
+      description: 文章序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 标题
+          maxLength: 255
+        content:
+          type: string
+          title: 内容
+        author:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status99cEnum'
+          title: 状态
+        view_count:
+          type: integer
+          readOnly: true
+          title: 访问次数
+          description: 文章被访问的次数
+      required:
+      - content
+      - title
+    ArticleCreateUpdateRequest:
+      type: object
+      description: 创建和更新文章序列化器
+      properties:
+        title:
+          type: string
+          minLength: 1
+          title: 标题
+          maxLength: 255
+        content:
+          type: string
+          minLength: 1
+          title: 内容
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status99cEnum'
+          title: 状态
+      required:
+      - content
+      - title
+    ArticleSearch:
+      type: object
+      description: 搜索结果序列化器 - 简化版本，用于搜索结果展示
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 标题
+          maxLength: 255
+        content:
+          type: string
+          readOnly: true
+        author:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status99cEnum'
+          title: 状态
+        view_count:
+          type: integer
+          readOnly: true
+          title: 访问次数
+          description: 文章被访问的次数
+      required:
+      - title
+    Author:
+      type: object
+      description: 作者序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: 邮箱
+          maxLength: 254
+        avatar:
+          type: string
+          format: uri
+          title: 头像
+      required:
+      - email
+      - username
+    AuthorRequest:
+      type: object
+      description: 作者序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        avatar:
+          type: string
+          format: binary
+          title: 头像
+      required:
+      - email
+      - username
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        article:
+          type: integer
+          readOnly: true
+          title: 文章
+        content:
+          type: string
+          title: 内容
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CommentStatusEnum'
+          readOnly: true
+          title: 审核状态
+        status_display:
+          type: string
+          readOnly: true
+        parent:
+          type: integer
+          nullable: true
+          title: 父评论
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reply'
+          readOnly: true
+      required:
+      - content
+    CommentRequest:
+      type: object
+      properties:
+        content:
+          type: string
+          minLength: 1
+          title: 内容
+        parent:
+          type: integer
+          nullable: true
+          title: 父评论
+      required:
+      - content
+    CommentStatusEnum:
+      enum:
+      - pending
+      - approved
+      - rejected
+      type: string
+      description: |-
+        * `pending` - 待审核
+        * `approved` - 已通过
+        * `rejected` - 已拒绝
+    PaginatedArticleList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Article'
+    PaginatedArticleSearchList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArticleSearch'
+    PaginatedCommentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+    PatchedArticleCreateUpdateRequest:
+      type: object
+      description: 创建和更新文章序列化器
+      properties:
+        title:
+          type: string
+          minLength: 1
+          title: 标题
+          maxLength: 255
+        content:
+          type: string
+          minLength: 1
+          title: 内容
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status99cEnum'
+          title: 状态
+    PatchedUserRequest:
+      type: object
+      description: 用户序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        bio:
+          type: string
+          title: 个人简介
+          maxLength: 500
+        avatar:
+          type: string
+          format: binary
+          title: 头像
+    Reply:
+      type: object
+      description: 用于嵌套回复的序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/Author'
+          readOnly: true
+        article:
+          type: integer
+          readOnly: true
+          title: 文章
+        content:
+          type: string
+          title: 内容
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        parent:
+          type: integer
+          readOnly: true
+          nullable: true
+          title: 父评论
+      required:
+      - content
+    ReplyRequest:
+      type: object
+      description: 用于嵌套回复的序列化器
+      properties:
+        content:
+          type: string
+          minLength: 1
+          title: 内容
+      required:
+      - content
+    Status99cEnum:
+      enum:
+      - draft
+      - published
+      type: string
+      description: |-
+        * `draft` - 草稿
+        * `published` - 已发布
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - refresh
+    User:
+      type: object
+      description: 用户序列化器
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          readOnly: true
+          title: 邮箱
+        bio:
+          type: string
+          title: 个人简介
+          maxLength: 500
+        avatar:
+          type: string
+          format: uri
+          title: 头像
+        is_active:
+          type: boolean
+          readOnly: true
+          title: 用户激活状态
+      required:
+      - username
+    UserRegisterRequest:
+      type: object
+      description: 用户注册序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: 邮箱
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password2:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+      - password2
+      - username
+    UserRequest:
+      type: object
+      description: 用户序列化器
+      properties:
+        username:
+          type: string
+          minLength: 1
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        bio:
+          type: string
+          title: 个人简介
+          maxLength: 500
+        avatar:
+          type: string
+          format: binary
+          title: 头像
+      required:
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+servers:
+- url: http://localhost:8000
+  description: 开发服务器
+tags:
+- name: 用户管理
+  description: 用户注册、登录、个人信息管理
+- name: 文章管理
+  description: 文章的创建、编辑、删除、查看和搜索
+- name: 评论系统
+  description: 文章评论的创建、查看和管理

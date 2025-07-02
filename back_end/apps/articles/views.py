@@ -10,8 +10,73 @@ from guardian.shortcuts import assign_perm, get_perms
 from django.core.cache import cache
 from django.conf import settings
 import hashlib
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["文章管理"],
+        summary="获取文章列表",
+        description="获取文章列表，支持分页。未登录用户只能看到已发布文章，登录用户可以看到自己的草稿",
+        responses={200: ArticleSerializer(many=True)}
+    ),
+    create=extend_schema(
+        tags=["文章管理"],
+        summary="创建文章",
+        description="创建新文章，需要登录",
+        request=ArticleCreateUpdateSerializer,
+        responses={
+            201: ArticleSerializer,
+            401: {"description": "未认证"},
+            400: {"description": "请求数据无效"}
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["文章管理"],
+        summary="获取文章详情",
+        description="获取指定文章的详细信息，会增加文章的访问计数",
+        responses={
+            200: ArticleSerializer,
+            404: {"description": "文章不存在"}
+        }
+    ),
+    update=extend_schema(
+        tags=["文章管理"],
+        summary="更新文章",
+        description="更新文章信息，只有作者或管理员可以操作",
+        request=ArticleCreateUpdateSerializer,
+        responses={
+            200: ArticleSerializer,
+            401: {"description": "未认证"},
+            403: {"description": "无权限"},
+            404: {"description": "文章不存在"}
+        }
+    ),
+    partial_update=extend_schema(
+        tags=["文章管理"],
+        summary="部分更新文章",
+        description="部分更新文章信息，只有作者或管理员可以操作",
+        request=ArticleCreateUpdateSerializer,
+        responses={
+            200: ArticleSerializer,
+            401: {"description": "未认证"},
+            403: {"description": "无权限"},
+            404: {"description": "文章不存在"}
+        }
+    ),
+    destroy=extend_schema(
+        tags=["文章管理"],
+        summary="删除文章",
+        description="删除文章，只有作者或管理员可以操作",
+        responses={
+            204: {"description": "删除成功"},
+            401: {"description": "未认证"},
+            403: {"description": "无权限"},
+            404: {"description": "文章不存在"}
+        }
+    )
+)
 class ArticleViewSet(viewsets.ModelViewSet):
     """
     文章视图集
@@ -238,6 +303,52 @@ class ArticleViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+@extend_schema(
+    tags=["文章管理"],
+    summary="搜索文章",
+    description="根据关键词搜索已发布的文章，支持按标题、内容、作者搜索",
+    parameters=[
+        OpenApiParameter(
+            name="q",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            required=True,
+            description="搜索关键词"
+        ),
+        OpenApiParameter(
+            name="type",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="搜索类型：all(全部)、title(标题)、content(内容)、author(作者)",
+            enum=["all", "title", "content", "author"]
+        ),
+        OpenApiParameter(
+            name="ordering",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="排序方式：-created_at(最新)、created_at(最早)、-view_count(最热)、view_count(最冷)、title(标题A-Z)、-title(标题Z-A)",
+            enum=["-created_at", "created_at", "-view_count", "view_count", "title", "-title"]
+        ),
+        OpenApiParameter(
+            name="page",
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="页码"
+        )
+    ],
+    responses={
+        200: ArticleSearchSerializer(many=True),
+        400: {
+            "description": "搜索参数无效",
+            "example": {
+                "error": "搜索关键词不能为空"
+            }
+        }
+    }
+)
 class ArticleSearchView(generics.ListAPIView):
     """
     文章搜索视图

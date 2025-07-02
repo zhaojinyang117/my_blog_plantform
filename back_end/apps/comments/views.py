@@ -7,7 +7,49 @@ from .permissions import IsCommentUserOrReadOnly
 # 评论不允许编辑，只允许创建和删除
 from django.shortcuts import get_object_or_404
 from guardian.shortcuts import assign_perm, get_perms
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["评论系统"],
+        summary="获取文章评论列表",
+        description="获取指定文章下的所有评论，包含嵌套回复结构",
+        responses={200: CommentSerializer(many=True)}
+    ),
+    create=extend_schema(
+        tags=["评论系统"],
+        summary="创建评论",
+        description="为指定文章创建新评论或回复，需要登录",
+        request=CommentSerializer,
+        responses={
+            201: CommentSerializer,
+            401: {"description": "未认证"},
+            400: {"description": "请求数据无效"},
+            404: {"description": "文章不存在"}
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["评论系统"],
+        summary="获取评论详情",
+        description="获取指定评论的详细信息",
+        responses={
+            200: CommentSerializer,
+            404: {"description": "评论不存在"}
+        }
+    ),
+    destroy=extend_schema(
+        tags=["评论系统"],
+        summary="删除评论",
+        description="删除评论，只有评论作者或管理员可以操作",
+        responses={
+            204: {"description": "删除成功"},
+            401: {"description": "未认证"},
+            403: {"description": "无权限"},
+            404: {"description": "评论不存在"}
+        }
+    )
+)
 class CommentViewSet(viewsets.ModelViewSet):
     """
     评论视图集

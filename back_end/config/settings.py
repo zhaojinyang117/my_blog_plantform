@@ -54,6 +54,8 @@ INSTALLED_APPS = [
     "corsheaders",
     # 添加 Django Guardian 对象级权限控制
     "guardian",
+    # 添加 drf-spectacular 用于API文档生成
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -93,28 +95,28 @@ WSGI_APPLICATION = "config.wsgi.application"
 # <https://docs.djangoproject.com/en/5.2/ref/settings/#databases>
 
 # SQLite 数据库配置 (已注释)
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": BASE_DIR / "db.sqlite3",
-#     }
-# }
-
-# MySQL 数据库配置 (使用 pymysql)
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": "my_blog_platform",
-        "USER": "root",
-        "PASSWORD": "",
-        "HOST": "localhost",
-        "PORT": "3306",
-        "OPTIONS": {
-            "charset": "utf8mb4",
-            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# MySQL 数据库配置 (使用 pymysql)
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": "my_blog_platform",
+#         "USER": "root",
+#         "PASSWORD": "",
+#         "HOST": "localhost",
+#         "PORT": "3306",
+#         "OPTIONS": {
+#             "charset": "utf8mb4",
+#             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+#         },
+#     }
+# }
 
 
 # Password validation
@@ -176,6 +178,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
+    # 添加 drf-spectacular 作为默认的 schema 生成器
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # Simple JWT 配置
@@ -266,4 +270,42 @@ CACHE_TIMEOUT = {
     "hot_articles": 3600,  # 热门文章缓存1小时
     "article_detail": 1800,  # 文章详情缓存30分钟
     "article_list": 600,  # 文章列表缓存10分钟
+}
+
+# drf-spectacular 配置
+SPECTACULAR_SETTINGS = {
+    "TITLE": "博客平台 API",
+    "DESCRIPTION": "一个功能完整的博客平台后端API，支持用户管理、文章发布、评论系统等功能",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    # 认证配置
+    "COMPONENT_SPLIT_REQUEST": True,
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
+    # JWT认证配置
+    "SECURITY": [
+        {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    ],
+    # 标签配置
+    "TAGS": [
+        {"name": "用户管理", "description": "用户注册、登录、个人信息管理"},
+        {"name": "文章管理", "description": "文章的创建、编辑、删除、查看和搜索"},
+        {"name": "评论系统", "description": "文章评论的创建、查看和管理"},
+    ],
+    # 服务器配置
+    "SERVERS": [
+        {"url": "http://localhost:8000", "description": "开发服务器"},
+    ],
+    # 联系信息
+    "CONTACT": {
+        "name": "博客平台开发团队",
+        "email": "dev@blog.com",
+    },
+    # 许可证信息
+    "LICENSE": {
+        "name": "MIT License",
+    },
 }

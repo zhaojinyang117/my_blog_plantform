@@ -4,11 +4,36 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from .serializers import UserSerializer, UserRegisterSerializer, UserProfileSerializer
 from utils.email import send_verification_email
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.openapi import OpenApiParameter, OpenApiTypes
 
 
 User = get_user_model()
 
 
+@extend_schema(
+    tags=["用户管理"],
+    summary="用户注册",
+    description="创建新用户账户，注册成功后会发送邮箱验证邮件",
+    responses={
+        201: {
+            "description": "注册成功",
+            "example": {
+                "message": "用户注册成功，请前往邮箱验证",
+                "user_id": 1,
+                "email": "user@example.com"
+            }
+        },
+        400: {
+            "description": "请求数据无效",
+            "example": {
+                "username": ["该字段是必需的。"],
+                "email": ["请输入一个有效的邮箱地址。"],
+                "password": ["两次密码不一致"]
+            }
+        }
+    }
+)
 class UserRegisterView(generics.CreateAPIView):
     """
     用户注册视图
@@ -51,6 +76,35 @@ class UserRegisterView(generics.CreateAPIView):
         )
 
 
+@extend_schema(
+    tags=["用户管理"],
+    summary="邮箱验证",
+    description="通过验证token激活用户账户",
+    parameters=[
+        OpenApiParameter(
+            name="token",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            required=True,
+            description="邮箱验证token"
+        )
+    ],
+    responses={
+        200: {
+            "description": "验证成功或已验证",
+            "example": {
+                "message": "邮箱验证成功！您的账户已激活",
+                "status": "success"
+            }
+        },
+        400: {
+            "description": "验证失败",
+            "example": {
+                "error": "无效的验证token"
+            }
+        }
+    }
+)
 class EmailVerifyView(APIView):
     """
     邮箱验证视图
@@ -107,6 +161,20 @@ class EmailVerifyView(APIView):
 ################################
 
 
+@extend_schema(
+    tags=["用户管理"],
+    summary="获取当前用户信息",
+    description="获取当前登录用户的详细信息",
+    responses={
+        200: UserSerializer,
+        401: {
+            "description": "未认证",
+            "example": {
+                "detail": "身份认证信息未提供。"
+            }
+        }
+    }
+)
 class UserDetailView(generics.RetrieveAPIView):
     """
     获取当前用户信息
@@ -128,6 +196,26 @@ class UserDetailView(generics.RetrieveAPIView):
         return self.request.user
 
 
+@extend_schema(
+    tags=["用户管理"],
+    summary="更新用户信息",
+    description="更新当前登录用户的基本信息（用户名、个人简介等）",
+    responses={
+        200: UserSerializer,
+        400: {
+            "description": "请求数据无效",
+            "example": {
+                "username": ["该字段是必需的。"]
+            }
+        },
+        401: {
+            "description": "未认证",
+            "example": {
+                "detail": "身份认证信息未提供。"
+            }
+        }
+    }
+)
 class UserUpdateView(generics.UpdateAPIView):
     """
     更新当前用户信息
@@ -144,6 +232,45 @@ class UserUpdateView(generics.UpdateAPIView):
         return self.request.user
 
 
+@extend_schema(
+    tags=["用户管理"],
+    summary="更新用户头像",
+    description="上传并更新当前用户的头像图片",
+    request={
+        "multipart/form-data": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "头像图片文件"
+                }
+            },
+            "required": ["avatar"]
+        }
+    },
+    responses={
+        200: {
+            "description": "头像更新成功",
+            "example": {
+                "message": "头像更新成功",
+                "avatar_url": "/media/avatars/user_1/avatar.jpg"
+            }
+        },
+        400: {
+            "description": "请求数据无效",
+            "example": {
+                "error": "请选择要上传的头像文件"
+            }
+        },
+        401: {
+            "description": "未认证",
+            "example": {
+                "detail": "身份认证信息未提供。"
+            }
+        }
+    }
+)
 class UserAvatarUpdateView(generics.UpdateAPIView):
     """
     更新用户头像

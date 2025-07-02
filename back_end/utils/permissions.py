@@ -62,7 +62,6 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
             return True
         
         # 写操作需要用户为对象的所有者
-        # 这里假设对象有owner或author字段
         if hasattr(obj, 'owner'):
             return obj.owner == request.user
         elif hasattr(obj, 'author'):

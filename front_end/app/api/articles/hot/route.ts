@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export async function GET(request: NextRequest) {
   try {
     // 转发请求到后端热门文章API
-    const response = await fetch(`${BACKEND_URL}/api/articles/hot_articles/`, {
+    const response = await fetch(`${BACKEND_URL}/articles/hot_articles/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

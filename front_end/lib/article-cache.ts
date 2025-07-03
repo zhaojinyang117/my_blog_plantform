@@ -1,6 +1,6 @@
 // 文章缓存管理
 const articleCache = new Map<string, { article: any; timestamp: number }>()
-const CACHE_DURATION = 5000 // 5秒缓存时间
+const CACHE_DURATION = parseInt(process.env.NEXT_PUBLIC_CACHE_DURATION || '5000') // 缓存时间（毫秒）
 
 export const getCachedArticle = (articleId: string) => {
   const cached = articleCache.get(articleId)

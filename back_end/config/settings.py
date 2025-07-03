@@ -13,6 +13,11 @@ For the full list of settings and their values, see
 from pathlib import Path
 from datetime import timedelta
 import pymysql
+import os
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 使用 pymysql 作为 MySQL 驱动
 pymysql.install_as_MySQLdb()
@@ -25,12 +30,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See <https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/>
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-6hw9j9upli^t3g7m(58i67be^&(@-n9@xiuw*=varx@unx8&93"
+SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-6hw9j9upli^t3g7m(58i67be^&(@-n9@xiuw*=varx@unx8&93")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes", "on")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",") if os.getenv("ALLOWED_HOSTS") else []
 
 
 # Application definition
@@ -94,29 +99,32 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # <https://docs.djangoproject.com/en/5.2/ref/settings/#databases>
 
-# SQLite 数据库配置 (已注释)
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
+# 数据库配置 - 支持SQLite和MySQL
+DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "django.db.backends.sqlite3")
 
-# MySQL 数据库配置 (使用 pymysql)
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.mysql",
-#         "NAME": "my_blog_platform",
-#         "USER": "root",
-#         "PASSWORD": "",
-#         "HOST": "localhost",
-#         "PORT": "3306",
-#         "OPTIONS": {
-#             "charset": "utf8mb4",
-#             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-#         },
-#     }
-# }
+if DATABASE_ENGINE == "django.db.backends.sqlite3":
+    DATABASES = {
+        "default": {
+            "ENGINE": DATABASE_ENGINE,
+            "NAME": BASE_DIR / os.getenv("DATABASE_NAME", "db.sqlite3"),
+        }
+    }
+else:
+    # MySQL 或其他数据库配置
+    DATABASES = {
+        "default": {
+            "ENGINE": DATABASE_ENGINE,
+            "NAME": os.getenv("DATABASE_NAME", "my_blog_platform"),
+            "USER": os.getenv("DATABASE_USER", "root"),
+            "PASSWORD": os.getenv("DATABASE_PASSWORD", ""),
+            "HOST": os.getenv("DATABASE_HOST", "localhost"),
+            "PORT": os.getenv("DATABASE_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
 
 
 # Password validation
@@ -184,8 +192,8 @@ REST_FRAMEWORK = {
 
 # Simple JWT 配置
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", "30"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_TOKEN_LIFETIME_DAYS", "1"))),
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": False,
@@ -206,35 +214,31 @@ SIMPLE_JWT = {
 }
 
 # CORS 配置
-CORS_ALLOW_ALL_ORIGINS = True  # 开发环境可以设置为 True，生产环境应该指定允许的域名
-# 或者指定允许的域名
-# CORS_ALLOWED_ORIGINS = [
-#     "<http://localhost:3000>",
-#     "<http://127.0.0.1:3000>",
-# ]
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True").lower() in ("true", "1", "yes", "on")
+
+# 如果不允许所有源，则使用指定的域名列表
+if not CORS_ALLOW_ALL_ORIGINS:
+    cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
 
 # 自定义用户模型
 AUTH_USER_MODEL = "users.User"
 
 # 邮件配置
-EMAIL_BACKEND = (
-    "django.core.mail.backends.console.EmailBackend"  # 开发环境使用控制台输出
-)
-# 生产环境邮件配置示例（后面可以放进.env中,明文存储太危险了）:
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'  # 邮件服务器
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'your-email@gmail.com'
-# EMAIL_HOST_PASSWORD = 'your-app-password'
-DEFAULT_FROM_EMAIL = "noreply@blog.com"
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes", "on")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "2450414312@stu.tjise.edu.cn")
 
-# 前端URL配置（用于邮件验证链接, 等后面也放进.env里）
-FRONTEND_URL = "<http://localhost:3000>"
+# 前端URL配置（用于邮件验证链接）
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # 文件上传配置
-FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = FILE_UPLOAD_MAX_MEMORY_SIZE
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("FILE_UPLOAD_MAX_MEMORY_SIZE", str(2 * 1024 * 1024)))  # 默认2MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DATA_UPLOAD_MAX_MEMORY_SIZE", str(FILE_UPLOAD_MAX_MEMORY_SIZE)))
 
 # Django Guardian 配置
 AUTHENTICATION_BACKENDS = (
@@ -245,15 +249,15 @@ AUTHENTICATION_BACKENDS = (
 # Guardian 匿名用户配置
 ANONYMOUS_USER_NAME = None  # 禁用匿名用户权限
 
-# 阶段10：Redis缓存配置
+# Redis缓存配置
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "CONNECTION_POOL_KWARGS": {
-                "max_connections": 50,
+                "max_connections": int(os.getenv("REDIS_MAX_CONNECTIONS", "50")),
                 "decode_responses": True,
             },
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
@@ -263,20 +267,21 @@ CACHES = {
 }
 
 # 缓存键前缀设置
-CACHE_KEY_PREFIX = "blog_platform"
+CACHE_KEY_PREFIX = os.getenv("CACHE_KEY_PREFIX", "blog_platform")
 
 # 缓存超时设置（秒）
 CACHE_TIMEOUT = {
-    "hot_articles": 3600,  # 热门文章缓存1小时
-    "article_detail": 1800,  # 文章详情缓存30分钟
-    "article_list": 600,  # 文章列表缓存10分钟
+    "hot_articles": int(os.getenv("CACHE_TIMEOUT_HOT_ARTICLES", "3600")),  # 热门文章缓存
+    "article_detail": int(os.getenv("CACHE_TIMEOUT_ARTICLE_DETAIL", "1800")),  # 文章详情缓存
+    "article_list": int(os.getenv("CACHE_TIMEOUT_ARTICLE_LIST", "600")),  # 文章列表缓存
+    "search_results": int(os.getenv("CACHE_TIMEOUT_SEARCH_RESULTS", "300")),  # 搜索结果缓存
 }
 
 # drf-spectacular 配置
 SPECTACULAR_SETTINGS = {
-    "TITLE": "博客平台 API",
-    "DESCRIPTION": "一个功能完整的博客平台后端API，支持用户管理、文章发布、评论系统等功能",
-    "VERSION": "1.0.0",
+    "TITLE": os.getenv("API_TITLE", "博客平台 API"),
+    "DESCRIPTION": os.getenv("API_DESCRIPTION", "一个功能完整的博客平台后端API，支持用户管理、文章发布、评论系统等功能"),
+    "VERSION": os.getenv("API_VERSION", "1.0.0"),
     "SERVE_INCLUDE_SCHEMA": False,
     # 认证配置
     "COMPONENT_SPLIT_REQUEST": True,
@@ -297,15 +302,15 @@ SPECTACULAR_SETTINGS = {
     ],
     # 服务器配置
     "SERVERS": [
-        {"url": "http://localhost:8000", "description": "开发服务器"},
+        {"url": os.getenv("API_SERVER_URL", "http://localhost:8000"), "description": os.getenv("API_SERVER_DESCRIPTION", "开发服务器")},
     ],
     # 联系信息
     "CONTACT": {
-        "name": "博客平台开发团队",
-        "email": "dev@blog.com",
+        "name": os.getenv("API_CONTACT_NAME", "博客平台开发团队"),
+        "email": os.getenv("API_CONTACT_EMAIL", "2450414312@stu.tjise.edu.cn"),
     },
     # 许可证信息
     "LICENSE": {
-        "name": "MIT License",
+        "name": os.getenv("API_LICENSE_NAME", "MIT License"),
     },
 }

@@ -29,8 +29,9 @@ export default function ArticleActions({ articleId, authorId }: ArticleActionsPr
   const router = useRouter()
   const { toast } = useToast()
 
-  if (!isAuthenticated || user?.id !== authorId) {
-    return null // Only show actions if authenticated and is the author
+  // 只有作者或管理员才能看到操作按钮
+  if (!isAuthenticated || (user?.id !== authorId && !user?.is_staff)) {
+    return null
   }
 
   const handleDelete = async () => {
